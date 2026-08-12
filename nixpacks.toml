@@ -1,11 +1,10 @@
-# Node-Version für Railway festnageln.
 # better-sqlite3 ist ein nativer Baustein und muss gegen dieselbe Node-Version
 # kompiliert werden, die später auch läuft. Node 24 ist hier bewusst nicht
 # gesetzt, weil die vorgefertigten Binaries dafür noch nicht durchgängig
 # verfügbar sind.
 
 [phases.setup]
-nixPkgs = ["nodejs_20", "python3", "gcc", "gnumake"]
+nixPkgs = ["nodejs_22", "python3", "gcc", "gnumake"]
 
 [phases.install]
 cmds = ["npm ci --include=dev"]
