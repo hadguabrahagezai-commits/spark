@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from "recharts";
-import { AlertTriangle, Ban, Plus, Trash2, Upload, Wallet } from "lucide-react";
+import { AlertTriangle, Ban, Loader2, Plus, Trash2, Upload, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -9,8 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Page, PageHeader } from "@/components/Layout";
+import { Markdown } from "@/components/Markdown";
 import { useApp } from "@/state";
-import { BankVerbinden } from "@/components/BankVerbinden";
 import { useToast } from "@/hooks/use-toast";
 
 type Sub = { id: number; name: string; category: string; amount: number; cycle: string; lastUsed: string; source: string; active: number };
@@ -26,6 +26,10 @@ export default function Finanzen() {
   const [open, setOpen] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
   const [csv, setCsv] = useState("");
+  const [coachQuestion, setCoachQuestion] = useState("Wo kann ich diesen Monat sparen?");
+  const [coachAnswer, setCoachAnswer] = useState("");
+  const [coachBusy, setCoachBusy] = useState(false);
+  const [coachError, setCoachError] = useState("");
   const [form, setForm] = useState({ name: "", amount: "", cycle: "monatlich", category: "sonstiges", lastUsed: "" });
 
   const load = async () => {
@@ -62,7 +66,19 @@ export default function Finanzen() {
 
       {error && <p className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
 
-      <BankVerbinden onAbosAktualisiert={() => void load()} />
+      <section className="spark-hero mb-5 rounded-2xl p-5" data-testid="card-finance-coach">
+        <div className="flex flex-wrap items-start gap-3">
+          <Wallet className="mt-0.5 h-5 w-5 text-primary" />
+          <div className="min-w-0 flex-1"><p className="text-sm font-medium">Live-Finanz-Coach</p><p className="mt-1 text-xs text-muted-foreground">Analysiert nur echte Plaid-Umsätze und wiederkehrende Buchungen. Empfehlungen führen keine Bankaktion aus.</p></div>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <Input value={coachQuestion} onChange={(e) => setCoachQuestion(e.target.value)} aria-label="Frage an den Finanz-Coach" />
+          <Button disabled={coachBusy || !coachQuestion.trim()} onClick={async () => { setCoachBusy(true); setCoachError(""); try { const r = await api<any>("POST", "/api/finance/coach", { frage: coachQuestion }); setCoachAnswer(r.antwort); } catch (e: any) { setCoachError(e.message); } finally { setCoachBusy(false); } }} data-testid="button-finance-coach">{coachBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Fragen"}</Button>
+        </div>
+        {coachError && <p className="mt-3 text-sm text-destructive">{coachError}</p>}
+        {coachAnswer && <div className="mt-3 rounded-md bg-muted/50 p-3 text-sm"><Markdown>{coachAnswer}</Markdown></div>}
+      </section>
+
 
       <div className="grid gap-3 sm:grid-cols-3">
         {[

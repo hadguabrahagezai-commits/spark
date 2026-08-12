@@ -16,7 +16,7 @@ import { Markdown } from "@/components/Markdown";
 import { useApp } from "@/state";
 
 type Today = {
-  stats: { totalXp: number; streak: number; rank: string; rankProgress: number; nextRankXp: number };
+  stats: { totalXp: number; streak: number; minutes: number };
   tasks: { id: number; title: string; done: number; target: string; priority: number }[];
   faelligeKarten: number;
   energie: string;
@@ -69,6 +69,9 @@ export default function Heute() {
   const [sugError, setSugError] = useState("");
   const [sugLoading, setSugLoading] = useState(false);
   const [error, setError] = useState("");
+  const [lifeBriefing, setLifeBriefing] = useState<{ briefing: string; datenstand: { termine: number; ungeleseneMails: number } } | null>(null);
+  const [lifeLoading, setLifeLoading] = useState(false);
+  const [lifeError, setLifeError] = useState("");
 
   const load = async () => {
     try {
@@ -82,6 +85,13 @@ export default function Heute() {
     try { setSuggestion(await api("POST", "/api/today/suggestion", {})); }
     catch (e: any) { setSugError(e.message); }
     finally { setSugLoading(false); }
+  };
+
+  const loadLifeBriefing = async () => {
+    setLifeLoading(true); setLifeError("");
+    try { setLifeBriefing(await api("POST", "/api/life/briefing", {})); }
+    catch (e: any) { setLifeError(e.message); }
+    finally { setLifeLoading(false); }
   };
 
   useEffect(() => { void load(); void loadSuggestion(); /* eslint-disable-next-line */ }, []);
@@ -114,8 +124,23 @@ export default function Heute() {
         </div>
       )}
 
+      <section className="spark-panel mb-5 rounded-2xl p-5" data-testid="card-auto-life">
+        <div className="flex flex-wrap items-start gap-3">
+          <CalendarDays className="mt-0.5 h-5 w-5 text-primary" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">Auto-Life-Manager</p>
+            <p className="mt-1 text-xs text-muted-foreground">Prüft auf Wunsch deine echten Google-Kalender- und Gmail-Daten der nächsten Tage. Es werden keine Aktionen ohne deine Bestätigung ausgeführt.</p>
+          </div>
+          <Button size="sm" variant="outline" disabled={lifeLoading} onClick={() => void loadLifeBriefing()} data-testid="button-auto-life">
+            {lifeLoading ? <RefreshCw className="mr-1 h-3.5 w-3.5 animate-spin" /> : null} Jetzt prüfen
+          </Button>
+        </div>
+        {lifeError && <p className="mt-3 text-sm text-destructive">{lifeError}</p>}
+        {lifeBriefing && <div className="mt-3 rounded-md bg-muted/50 p-3 text-sm"><Markdown>{lifeBriefing.briefing}</Markdown><p className="mt-2 text-[11px] text-muted-foreground">Datenbasis: {lifeBriefing.datenstand.termine} Termine, {lifeBriefing.datenstand.ungeleseneMails} ungelesene E-Mails.</p></div>}
+      </section>
+
       {/* Copilot-Zeile */}
-      <section className="rounded-lg border border-card-border bg-card p-4" data-testid="card-copilot">
+      <section className="spark-hero rounded-2xl p-5 md:p-6" data-testid="card-copilot">
         <div className="flex gap-3">
           {avatar && <SparkAvatar config={avatar} size={56} mood="freudig" className="shrink-0" />}
           <div className="min-w-0 flex-1">
@@ -181,10 +206,7 @@ export default function Heute() {
           <div>
             <p className="text-sm font-medium">Heutige Sparks</p>
             <p className="text-xs text-muted-foreground">{doneCount} von {tasksToday.length} erledigt</p>
-            <p className="mt-2 text-xs text-muted-foreground">Rang {data?.stats.rank} · {data?.stats.totalXp} XP</p>
-            <div className="mt-1 h-1.5 w-36 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-primary" style={{ width: `${data?.stats.rankProgress || 0}%` }} />
-            </div>
+            <p className="mt-2 text-xs text-muted-foreground">{data?.stats.totalXp ?? 0} XP aus erledigten Aktivitäten</p>
           </div>
         </div>
       </section>

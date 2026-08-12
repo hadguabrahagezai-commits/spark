@@ -15,7 +15,7 @@ type BankStatus = {
 };
 
 /** „Bank verbinden“ über Plaid Link — echte Verbindung, echte Abo-Erkennung. */
-export function BankVerbinden({ onAbosAktualisiert }: { onAbosAktualisiert?: () => void }) {
+export function BankVerbinden({ onAbosAktualisiert, onSkip }: { onAbosAktualisiert?: () => void; onSkip?: () => void }) {
   const { api } = useApp();
   const { toast } = useToast();
   const [status, setStatus] = useState<BankStatus | null>(null);
@@ -23,6 +23,7 @@ export function BankVerbinden({ onAbosAktualisiert }: { onAbosAktualisiert?: () 
   const [laedt, setLaedt] = useState(false);
   const [fehler, setFehler] = useState("");
   const [abrufe, setAbrufe] = useState(false);
+  const [übersprungen, setÜbersprungen] = useState(false);
 
   const statusLaden = useCallback(async () => {
     try {
@@ -89,6 +90,17 @@ export function BankVerbinden({ onAbosAktualisiert }: { onAbosAktualisiert?: () 
     }
   }
 
+  function überspringen() {
+    setÜbersprungen(true);
+    onSkip?.();
+  }
+
+  if (übersprungen) {
+    return <div className="mb-4 rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground" data-testid="status-bank-skipped">
+      Bankverbindung übersprungen. Du kannst sie jederzeit hier im Profil nachholen.
+    </div>;
+  }
+
   return (
     <div className="mb-4 rounded-md border border-card-border bg-card p-3" data-testid="section-bank-verbinden">
       <div className="flex flex-wrap items-center gap-2">
@@ -107,6 +119,7 @@ export function BankVerbinden({ onAbosAktualisiert }: { onAbosAktualisiert?: () 
             {laedt ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
             Bank verbinden
           </Button>
+          {onSkip && <Button size="sm" variant="ghost" onClick={überspringen} data-testid="button-skip-bank">Jetzt überspringen</Button>}
           {(status?.verbundeneBanken ?? 0) > 0 && (
             <Button size="sm" variant="outline" disabled={abrufe} onClick={() => void abosHolen()} data-testid="button-sync-recurring">
               <RefreshCw className={`mr-1 h-3.5 w-3.5 ${abrufe ? "animate-spin" : ""}`} /> Abos neu erkennen

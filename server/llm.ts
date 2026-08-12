@@ -37,24 +37,10 @@ export function providerConfigured(p: ProviderId): boolean {
   return Boolean(env("ANTHROPIC_API_KEY") || env("ANTHROPIC_AUTH_TOKEN"));
 }
 
-/** Reihenfolge beim automatischen Ausweichen, wenn der gewünschte Anbieter keinen Schlüssel hat. */
-const ORDER: ProviderId[] = ["gemini", "anthropic", "openai"];
-
-let lastFallbackLog = "";
-
-/** Der tatsächlich verwendete Anbieter — mit automatischem Ausweichen. */
+/** Der tatsächlich verwendete Anbieter. Es gibt keinen stillen Anbieterwechsel. */
 export function activeProvider(): ProviderId | null {
-  const wanted = (env("AI_PROVIDER").toLowerCase() as ProviderId) || "gemini";
-  if (ORDER.includes(wanted) && providerConfigured(wanted)) return wanted;
-  const fallback = ORDER.find((p) => providerConfigured(p));
-  if (fallback) {
-    const note = `[llm] AI_PROVIDER="${wanted}" hat keinen Schlüssel — es wird auf "${fallback}" ausgewichen.`;
-    if (note !== lastFallbackLog) {
-      console.warn(note);
-      lastFallbackLog = note;
-    }
-    return fallback;
-  }
+  const wanted = (env("AI_PROVIDER").toLowerCase() as ProviderId) || "openai";
+  if (["gemini", "openai", "anthropic"].includes(wanted) && providerConfigured(wanted)) return wanted;
   return null;
 }
 
@@ -84,7 +70,7 @@ export function providerStatus(): ProviderStatus {
   return {
     aktiv,
     modell: aktiv ? modelFor(aktiv) : "nicht konfiguriert",
-    gewuenscht: env("AI_PROVIDER") || "gemini",
+    gewuenscht: env("AI_PROVIDER") || "openai",
     anbieter: [
       {
         id: "gemini",

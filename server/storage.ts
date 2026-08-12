@@ -2,11 +2,11 @@ import { db, ensureSchema } from "./db";
 import {
   users, sessions, companions, settings, chats, messages, memories, subjects, levels,
   quizQuestions, reviewCards, missions, missionSteps, subscriptions, tasks, streaks,
-  xpEvents, leaderboard, SUBJECTS,
+  xpEvents, SUBJECTS,
 } from "@shared/schema";
 import type {
   User, Companion, Settings, Chat, Message, Memory, Level, QuizQuestion, ReviewCard,
-  Mission, MissionStep, Subscription, Task, Streak, LeaderboardEntry,
+  Mission, MissionStep, Subscription, Task, Streak,
 } from "@shared/schema";
 import { and, asc, desc, eq, lte, sql } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
@@ -54,7 +54,6 @@ class Storage implements IStorage {
     }
     db.delete(companions).where(eq(companions.userId, id)).run();
     db.delete(settings).where(eq(settings.userId, id)).run();
-    db.delete(leaderboard).where(eq(leaderboard.userId, id)).run();
     db.delete(sessions).where(eq(sessions.userId, id)).run();
     db.delete(users).where(eq(users.id, id)).run();
   }
@@ -137,7 +136,7 @@ class Storage implements IStorage {
     db.delete(messages).where(and(eq(messages.chatId, chatId), sql`id >= ${fromId}`)).run();
   }
 
-  /* ---------- Gedächtnis ---------- */
+  /* ---------- GedÃ¤chtnis ---------- */
   listMemories(userId: number): Memory[] {
     return db.select().from(memories).where(eq(memories.userId, userId)).orderBy(desc(memories.createdAt)).all();
   }
@@ -378,8 +377,6 @@ class Storage implements IStorage {
     const row = db.select().from(streaks).where(and(eq(streaks.userId, userId), eq(streaks.day, d))).get();
     if (row) db.update(streaks).set({ xp: row.xp + amount }).where(eq(streaks.id, row.id)).run();
     else db.insert(streaks).values({ userId, day: d, xp: amount, minutes: 0 }).run();
-    const entry = db.select().from(leaderboard).where(eq(leaderboard.userId, userId)).get();
-    if (entry) db.update(leaderboard).set({ xp: entry.xp + amount }).where(eq(leaderboard.id, entry.id)).run();
     return this.getStats(userId);
   }
   addMinutes(userId: number, minutes: number) {
@@ -406,54 +403,18 @@ class Storage implements IStorage {
         d.setDate(d.getDate() - 1);
       } else break;
     }
-    const rank = rankFor(totalXp);
     return {
       totalXp,
       streak,
       minutes: rows.reduce((a, b) => a + b.minutes, 0),
       days: rows,
-      rank: rank.name,
-      rankIndex: rank.index,
-      nextRankXp: rank.next,
-      rankProgress: rank.progress,
     };
-  }
-  listLeaderboard(scope: string, userId: number): LeaderboardEntry[] {
-    const own = db.select().from(leaderboard).where(eq(leaderboard.userId, userId)).get();
-    const stats = this.getStats(userId);
-    if (own) db.update(leaderboard).set({ xp: stats.totalXp }).where(eq(leaderboard.id, own.id)).run();
-    return db
-      .select()
-      .from(leaderboard)
-      .where(eq(leaderboard.scope, scope))
-      .orderBy(desc(leaderboard.xp))
-      .all();
-  }
-  ensureLeaderboardEntry(user: User) {
-    const own = db.select().from(leaderboard).where(eq(leaderboard.userId, user.id)).all();
-    const scopes = ["global", "freunde", "klasse"];
-    scopes.forEach((scope) => {
-      if (!own.some((o) => o.scope === scope)) {
-        db.insert(leaderboard)
-          .values({ userId: user.id, name: user.name || user.email.split("@")[0], scope, xp: 0, isSeed: 0 })
-          .run();
-      }
-    });
   }
 
   /* ---------- Seed ---------- */
   seedUserContent(userId: number) {
     this.ensureSubjects();
     this.ensureLevels(userId);
-    PRESET_MISSIONS.forEach((m) => this.createMission(userId, m, m.steps));
-    PRESET_SUBS.forEach((s) => this.addSubscription(userId, { ...s, source: "beispiel" }));
-    PRESET_TASKS.forEach((t, i) => this.addTask(userId, t.title, t.target, i + 1));
-    const seeded = db.select().from(leaderboard).where(eq(leaderboard.isSeed, 1)).all();
-    if (seeded.length === 0) {
-      SEED_PLAYERS.forEach((p) =>
-        db.insert(leaderboard).values({ name: p.name, scope: p.scope, xp: p.xp, avatarSeed: p.seed, isSeed: 1 }).run(),
-      );
-    }
   }
 
   exportAll(userId: number) {
@@ -473,133 +434,6 @@ class Storage implements IStorage {
     };
   }
 }
-
-export const RANKS = [
-  { name: "Funke", xp: 0 },
-  { name: "Glut", xp: 300 },
-  { name: "Flamme", xp: 900 },
-  { name: "Fackel", xp: 2000 },
-  { name: "Leuchtfeuer", xp: 4000 },
-  { name: "Nordstern", xp: 8000 },
-];
-
-export function rankFor(xp: number) {
-  let index = 0;
-  for (let i = 0; i < RANKS.length; i++) if (xp >= RANKS[i].xp) index = i;
-  const next = RANKS[index + 1]?.xp ?? RANKS[index].xp;
-  const base = RANKS[index].xp;
-  const progress = next > base ? Math.min(100, Math.round(((xp - base) / (next - base)) * 100)) : 100;
-  return { name: RANKS[index].name, index, next, progress };
-}
-
-const PRESET_MISSIONS: (Partial<Mission> & { steps: { title: string; kind?: string }[] })[] = [
-  {
-    title: "Reise Lissabon",
-    description: "Von der Idee bis zum gepackten Koffer — inklusive Sprach- und Geschichtshäppchen.",
-    category: "reise", icon: "plane", xpReward: 260, collectible: "Azulejo-Karte",
-    steps: [
-      { title: "Reisezeitraum festlegen", kind: "todo" },
-      { title: "Flüge & Unterkunft vergleichen", kind: "todo" },
-      { title: "Genius: Portugals Seefahrergeschichte", kind: "lektion" },
-      { title: "20 portugiesische Alltagswörter lernen", kind: "lektion" },
-      { title: "Packliste erstellen", kind: "todo" },
-      { title: "Budget im Abo-Checker hinterlegen", kind: "finanzen" },
-    ],
-  },
-  {
-    title: "Sparziel",
-    description: "1.000 € in 6 Monaten — mit Abo-Check und Wochenkontrolle.",
-    category: "finanzen", icon: "piggy", xpReward: 220, collectible: "Sparfuchs",
-    steps: [
-      { title: "Fixkosten auflisten", kind: "finanzen" },
-      { title: "Abo-Checker durchlaufen", kind: "finanzen" },
-      { title: "Genius: Zinseszins verstehen", kind: "lektion" },
-      { title: "Dauerauftrag einrichten", kind: "todo" },
-      { title: "Wochencheck festlegen", kind: "todo" },
-    ],
-  },
-  {
-    title: "Morgenroutine",
-    description: "14 Tage lang ein Start, der trägt.",
-    category: "alltag", icon: "sunrise", xpReward: 180,
-    steps: [
-      { title: "Weckzeit festlegen", kind: "todo" },
-      { title: "5 Minuten Bewegung einplanen", kind: "todo" },
-      { title: "Genius: Schlafrhythmus & Chronobiologie", kind: "lektion" },
-      { title: "Abendvorbereitung etablieren", kind: "todo" },
-      { title: "7-Tage-Check", kind: "todo" },
-    ],
-  },
-  {
-    title: "Bewerbung",
-    description: "Unterlagen, Auftritt und Gesprächstraining in klaren Schritten.",
-    category: "karriere", icon: "briefcase", xpReward: 300, collectible: "Türöffner",
-    steps: [
-      { title: "Stellenprofil analysieren", kind: "todo" },
-      { title: "Lebenslauf aktualisieren", kind: "todo" },
-      { title: "Anschreiben mit SPARK entwerfen", kind: "chat" },
-      { title: "Genius: Rhetorik-Grundlagen", kind: "lektion" },
-      { title: "Interview-Simulation im Chat", kind: "chat" },
-    ],
-  },
-  {
-    title: "Fit in 30 Tagen",
-    description: "Realistischer Einstieg in Bewegung — ohne Überforderung.",
-    category: "gesundheit", icon: "heart", xpReward: 260, collectible: "Herzschlag",
-    steps: [
-      { title: "Ausgangslage notieren", kind: "todo" },
-      { title: "3 Trainingstage festlegen", kind: "todo" },
-      { title: "Genius: Muskelaufbau & Regeneration", kind: "lektion" },
-      { title: "Woche 2: Umfang erhöhen", kind: "todo" },
-      { title: "Woche 4: Rückblick", kind: "todo" },
-    ],
-  },
-  {
-    title: "Digital entrümpeln",
-    description: "Weniger Lärm auf allen Geräten.",
-    category: "alltag", icon: "broom", xpReward: 160,
-    steps: [
-      { title: "Benachrichtigungen aussortieren", kind: "todo" },
-      { title: "Abos prüfen und kündigen", kind: "finanzen" },
-      { title: "Dateiablage aufräumen", kind: "todo" },
-      { title: "Genius: Aufmerksamkeit & Fokus", kind: "lektion" },
-    ],
-  },
-];
-
-const PRESET_SUBS = [
-  { name: "Streamdienst A", category: "unterhaltung", amount: 12.99, cycle: "monatlich", lastUsed: "vor 2 Tagen" },
-  { name: "Streamdienst B", category: "unterhaltung", amount: 9.99, cycle: "monatlich", lastUsed: "vor 4 Monaten" },
-  { name: "Musik-Flat", category: "unterhaltung", amount: 10.99, cycle: "monatlich", lastUsed: "heute" },
-  { name: "Cloud-Speicher", category: "software", amount: 29.0, cycle: "jährlich", lastUsed: "vor 1 Woche" },
-  { name: "Fitnessstudio", category: "gesundheit", amount: 34.9, cycle: "monatlich", lastUsed: "vor 3 Monaten" },
-  { name: "Zeitung digital", category: "medien", amount: 8.99, cycle: "monatlich", lastUsed: "vor 5 Wochen" },
-];
-
-const PRESET_TASKS = [
-  { title: "10 Minuten Genius: Physik", target: "genius" },
-  { title: "Abo-Check: 2 ungenutzte Abos prüfen", target: "finanzen" },
-  { title: "Kopf leeren vor dem Feierabend", target: "todo" },
-];
-
-const SEED_PLAYERS = [
-  { name: "Mira", scope: "global", xp: 4820, seed: "m" },
-  { name: "Jonas", scope: "global", xp: 4310, seed: "j" },
-  { name: "Alina", scope: "global", xp: 3990, seed: "a" },
-  { name: "Ben", scope: "global", xp: 3120, seed: "b" },
-  { name: "Yusuf", scope: "global", xp: 2740, seed: "y" },
-  { name: "Lea", scope: "global", xp: 2210, seed: "l" },
-  { name: "Nora", scope: "global", xp: 1680, seed: "n" },
-  { name: "Timo", scope: "global", xp: 940, seed: "t" },
-  { name: "Mira", scope: "freunde", xp: 1480, seed: "m" },
-  { name: "Ben", scope: "freunde", xp: 1120, seed: "b" },
-  { name: "Lea", scope: "freunde", xp: 860, seed: "l" },
-  { name: "Timo", scope: "freunde", xp: 420, seed: "t" },
-  { name: "Kurs 12b — Alina", scope: "klasse", xp: 2310, seed: "a" },
-  { name: "Kurs 12b — Jonas", scope: "klasse", xp: 1980, seed: "j" },
-  { name: "Kurs 12b — Nora", scope: "klasse", xp: 1210, seed: "n" },
-  { name: "Kurs 12b — Yusuf", scope: "klasse", xp: 760, seed: "y" },
-];
 
 export const storage = new Storage();
 storage.ensureSubjects();

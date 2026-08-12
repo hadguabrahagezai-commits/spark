@@ -13,7 +13,6 @@ import Genius from "@/pages/Genius";
 import Missionen from "@/pages/Missionen";
 import Chats from "@/pages/Chats";
 import Wiederholung from "@/pages/Wiederholung";
-import Bestenliste from "@/pages/Bestenliste";
 import Finanzen from "@/pages/Finanzen";
 import Einstellungen from "@/pages/Einstellungen";
 import Profil from "@/pages/Profil";
@@ -42,7 +41,6 @@ function Shell() {
         <Route path="/missionen" component={Missionen} />
         <Route path="/chats" component={Chats} />
         <Route path="/wiederholung" component={Wiederholung} />
-        <Route path="/bestenliste" component={Bestenliste} />
         <Route path="/finanzen" component={Finanzen} />
         <Route path="/einstellungen" component={Einstellungen} />
         <Route path="/profil" component={Profil} />

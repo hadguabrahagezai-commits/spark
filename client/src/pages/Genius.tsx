@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Atom, Beaker, Check, Cog, Globe, Lightbulb, Loader2, Lock, MessageSquare, Moon, Pause,
-  Play, RotateCcw, ScanLine, ScrollText, Sigma, Sprout, Timer, Trophy, Users, X,
+  Play, RotateCcw, ScanLine, ScrollText, Sigma, Sprout, Timer, Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,7 +15,6 @@ import { Page, PageHeader } from "@/components/Layout";
 import { Markdown } from "@/components/Markdown";
 import { useApp } from "@/state";
 import { useToast } from "@/hooks/use-toast";
-import { API_BASE } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 
 const ICONS: Record<string, any> = {
@@ -198,7 +198,6 @@ export default function Genius() {
           <TabsTrigger value="faecher" data-testid="tab-faecher">Fächer</TabsTrigger>
           <TabsTrigger value="fokus" data-testid="tab-fokus">Fokus</TabsTrigger>
           <TabsTrigger value="scan" data-testid="tab-scan">Scan-zu-Quiz</TabsTrigger>
-          <TabsTrigger value="live" data-testid="tab-live">Live-Quiz</TabsTrigger>
         </TabsList>
 
         {/* ------------------------------------------------------- Fächer */}
@@ -293,7 +292,6 @@ export default function Genius() {
         </TabsContent>
 
         {/* ------------------------------------------------------- Live */}
-        <TabsContent value="live" className="mt-4"><LiveQuiz /></TabsContent>
       </Tabs>
 
       {/* ------------------------------------------------------- Quiz-Dialog */}
@@ -375,6 +373,9 @@ function FocusTimer() {
   const [minutes, setMinutes] = useState(5);
   const [left, setLeft] = useState(300);
   const [running, setRunning] = useState(false);
+  const [goal, setGoal] = useState("");
+  const [coach, setCoach] = useState("");
+  const [coachBusy, setCoachBusy] = useState(false);
   const ref = useRef<number>();
 
   useEffect(() => { setLeft(minutes * 60); }, [minutes]);
@@ -387,6 +388,7 @@ function FocusTimer() {
           setRunning(false);
           ambient.stop();
           void api("POST", "/api/focus/session", { minutes }).then(() => refresh());
+          if (goal.trim()) void api<any>("POST", "/api/focus/coach", { phase: "abschluss", goal }).then((r) => setCoach(r.coach)).catch(() => {});
           return 0;
         }
         return l - 1;
@@ -415,6 +417,11 @@ function FocusTimer() {
           <Button key={m} size="sm" variant={minutes === m ? "default" : "outline"} onClick={() => { setMinutes(m); setRunning(false); }} data-testid={`button-minutes-${m}`}>{m} Min</Button>
         ))}
       </div>
+      <div className="mt-4 text-left">
+        <p className="text-xs font-medium">Fokus-Coach</p>
+        <div className="mt-2 flex gap-2"><Input value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Woran arbeitest du jetzt?" /><Button size="sm" disabled={!goal.trim() || coachBusy} onClick={async () => { setCoachBusy(true); try { const r = await api<any>("POST", "/api/focus/coach", { phase: "start", goal }); setCoach(r.coach); } finally { setCoachBusy(false); } }}>Coach fragen</Button></div>
+        {coach && <div className="mt-3 rounded-md bg-muted/60 p-3 text-sm"><Markdown>{coach}</Markdown></div>}
+      </div>
       <div className="mt-3 flex justify-center gap-2">
         <Button onClick={() => setRunning((r) => !r)} data-testid="button-timer-toggle">
           {running ? <Pause className="mr-1 h-4 w-4" /> : <Play className="mr-1 h-4 w-4" />}{running ? "Pause" : "Start"}
@@ -431,60 +438,6 @@ function FocusTimer() {
           ))}
         </div>
       </div>
-    </div>
-  );
-}
-
-/* --------------------------------- Live-Quiz ------------------------------ */
-function LiveQuiz() {
-  const [data, setData] = useState<any>(null);
-  const [joined, setJoined] = useState(false);
-  useEffect(() => {
-    if (!joined) return;
-    const es = new EventSource(`${API_BASE}/api/live/stream`);
-    es.onmessage = (e) => setData(JSON.parse(e.data));
-    es.onerror = () => es.close();
-    return () => es.close();
-  }, [joined]);
-
-  if (!joined) {
-    return (
-      <div className="max-w-md rounded-lg border border-card-border bg-card p-5 text-center">
-        <Users className="mx-auto mb-2 h-6 w-6 text-primary" />
-        <p className="text-sm font-medium">Live-Quiz-Lobby</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Die Mitspieler werden serverseitig simuliert und live per SSE aktualisiert — es ist kein echtes Mehrspieler-Netzwerk.
-        </p>
-        <Button className="mt-4" onClick={() => setJoined(true)} data-testid="button-join-live">Lobby betreten</Button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-md rounded-lg border border-card-border bg-card p-5">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">Lobby</p>
-        <Button size="sm" variant="ghost" onClick={() => setJoined(false)} data-testid="button-leave-live"><X className="h-4 w-4" /></Button>
-      </div>
-      {!data && <Skeleton className="mt-3 h-24 w-full" />}
-      {data && (
-        <>
-          <div className="mt-2 flex items-center gap-3">
-            <Badge variant="secondary">Start in {data.countdown}s</Badge>
-            <Badge variant="outline">{data.teilnehmer} Teilnehmer</Badge>
-          </div>
-          <ul className="mt-3 space-y-1.5">
-            {data.rangliste.map((p: any, i: number) => (
-              <li key={p.name} className="flex items-center gap-2 rounded-md border border-card-border bg-background p-2 text-sm" data-testid={`row-live-${i}`}>
-                <span className="w-5 text-xs text-muted-foreground">{i + 1}</span>
-                <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                <span className="text-xs font-medium">{p.xp} XP</span>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-[11px] text-muted-foreground">{data.hinweis}</p>
-        </>
-      )}
     </div>
   );
 }

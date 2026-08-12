@@ -222,15 +222,6 @@ CREATE TABLE IF NOT EXISTS google_tokens (
   email TEXT NOT NULL DEFAULT '',
   updated_at INTEGER NOT NULL DEFAULT 0
 );
-CREATE TABLE IF NOT EXISTS leaderboard (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER,
-  name TEXT NOT NULL,
-  scope TEXT NOT NULL DEFAULT 'global',
-  xp INTEGER NOT NULL DEFAULT 0,
-  avatar_seed TEXT NOT NULL DEFAULT 'a',
-  is_seed INTEGER NOT NULL DEFAULT 1
-);
 `);
 
   /* Nachträglich ergänzte Spalten (bestehende Datenbanken bleiben nutzbar). */
@@ -248,4 +239,11 @@ CREATE TABLE IF NOT EXISTS leaderboard (
   ergaenze("companions", "live_avatar_id", "TEXT NOT NULL DEFAULT ''");
   ergaenze("companions", "live_avatar_name", "TEXT NOT NULL DEFAULT ''");
   ergaenze("subscriptions", "external_id", "TEXT NOT NULL DEFAULT ''");
+  // Entfernt ausschließlich die frühere simulierte Ranglisten-Tabelle.
+  sqlite.exec("DROP TABLE IF EXISTS leaderboard");
+  // Einmalige Bereinigung der bekannten Musterinhalte aus früheren Builds.
+  sqlite.exec("DELETE FROM subscriptions WHERE source = 'beispiel'");
+  sqlite.exec("DELETE FROM tasks WHERE title IN ('10 Minuten Genius: Physik', 'Abo-Check: 2 ungenutzte Abos prüfen', 'Kopf leeren vor dem Feierabend')");
+  sqlite.exec("DELETE FROM mission_steps WHERE mission_id IN (SELECT id FROM missions WHERE title IN ('Reise Lissabon', 'Sparziel', 'Morgenroutine', 'Bewerbung', 'Fit in 30 Tagen', 'Digital entrümpeln'))");
+  sqlite.exec("DELETE FROM missions WHERE title IN ('Reise Lissabon', 'Sparziel', 'Morgenroutine', 'Bewerbung', 'Fit in 30 Tagen', 'Digital entrümpeln')");
 }

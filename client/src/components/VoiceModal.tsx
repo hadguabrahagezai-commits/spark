@@ -11,12 +11,13 @@ import { API_BASE } from "@/lib/queryClient";
 type AvatarModus = "heygen" | "svg";
 
 export function VoiceModal({
-  open, onOpenChange, chatId, onExchange,
+  open, onOpenChange, chatId, onExchange, initialText,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   chatId: number | null;
   onExchange?: () => void;
+  initialText?: string;
 }) {
   const { companion, token, api } = useApp();
   const speech = useSpeech();
@@ -28,7 +29,7 @@ export function VoiceModal({
   const [error, setError] = useState("");
   const [modus, setModus] = useState<AvatarModus>("svg");
   const [avatarStatus, setAvatarStatus] = useState("SPARK-Avatar (lokal)");
-  const [sttQuelle, setSttQuelle] = useState("Browser (Web Speech API)");
+  const [sttQuelle, setSttQuelle] = useState("OpenAI Whisper (Server)");
   const [verbindeAvatar, setVerbindeAvatar] = useState(false);
   const recRef = useRef<any>(null);
   const mediaRef = useRef<MediaRecorder | null>(null);
@@ -47,13 +48,19 @@ export function VoiceModal({
       setTranscript(""); setAnswer(""); setError("");
       return;
     }
-    if (companion?.avatarMode === "heygen") void startAvatar();
+    void (async () => {
+      await startAvatar();
+      if (initialText?.trim()) {
+        setAnswer(initialText);
+        await sprich(initialText);
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   /* ------------------------------------------------------ HeyGen Live-Avatar */
 
-  async function startAvatar() {
+  async function startAvatar(): Promise<boolean> {
     setVerbindeAvatar(true);
     setAvatarStatus("HeyGen wird verbunden …");
     try {
@@ -62,14 +69,18 @@ export function VoiceModal({
       const session = new mod.LiveAvatarSession(res.token, { voiceChat: false });
       sessionRef.current = session;
       await session.start();
-      if (videoRef.current) session.attach(videoRef.current);
       setModus("heygen");
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      if (!videoRef.current) throw new Error("HeyGen-Videoelement konnte nicht bereitgestellt werden.");
+      session.attach(videoRef.current);
       setAvatarStatus("HeyGen Live");
+      return true;
     } catch (e: any) {
       sessionRef.current = null;
       setModus("svg");
       setAvatarStatus("SPARK-Avatar (lokal)");
-      setError(`Live-Avatar nicht verfügbar: ${e.message} — SPARK nutzt den eigenen Avatar.`);
+      setError(`Live-Avatar nicht verfügbar: ${e.message}`);
+      return false;
     } finally {
       setVerbindeAvatar(false);
     }
@@ -95,7 +106,7 @@ export function VoiceModal({
     speech.stop();
   }
 
-  /** Bevorzugt serverseitiges Whisper, sonst Web Speech API im Browser. */
+  /** Serverseitige Spracherkennung über OpenAI Whisper. */
   async function listen() {
     setError("");
     try {
@@ -117,47 +128,18 @@ export function VoiceModal({
           setTranscript(r.text);
           setBusy(false);
           if (r.text?.trim()) await send(r.text.trim());
-        } catch {
+        } catch (e: any) {
           setBusy(false);
-          setSttQuelle("Browser (Web Speech API)");
-          browserListen();
+          setError(e.message || "Spracherkennung fehlgeschlagen.");
         }
       };
       mediaRef.current = rec;
       rec.start();
       setListening(true);
       window.setTimeout(() => { if (rec.state === "recording") rec.stop(); }, 12000);
-    } catch {
-      browserListen();
+    } catch (e: any) {
+      setError(e.message || "Mikrofonzugriff wurde nicht gewährt.");
     }
-  }
-
-  function browserListen() {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { setError("Keine Spracherkennung verfügbar. Ohne OPENAI_API_KEY und ohne Web-Speech-API geht es leider nicht."); return; }
-    const rec = new SR();
-    rec.lang = "de-DE";
-    rec.interimResults = true;
-    rec.continuous = false;
-    let finalText = "";
-    rec.onresult = (e: any) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i];
-        if (r.isFinal) finalText += r[0].transcript;
-        else interim += r[0].transcript;
-      }
-      setTranscript(finalText + interim);
-    };
-    rec.onend = () => {
-      setListening(false);
-      if (finalText.trim()) void send(finalText.trim());
-    };
-    rec.onerror = () => { setListening(false); setError("Spracherkennung abgebrochen."); };
-    rec.start();
-    recRef.current = rec;
-    setListening(true);
-    setSttQuelle("Browser (Web Speech API)");
   }
 
   /* -------------------------------------------------------------- Sprechen */
@@ -165,7 +147,7 @@ export function VoiceModal({
   async function sprich(text: string) {
     if (sessionRef.current) {
       try {
-        sessionRef.current.repeat(text);
+        await sessionRef.current.repeat(text);
         return;
       } catch {
         /* weiter zu TTS */
@@ -175,7 +157,7 @@ export function VoiceModal({
       const res = await fetch(`${API_BASE}/api/voice/tts`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, voiceProvider: companion?.voiceProvider }),
       });
       const typ = res.headers.get("content-type") || "";
       if (res.ok && !typ.includes("application/json")) {
@@ -183,12 +165,11 @@ export function VoiceModal({
         await speech.playAudio(URL.createObjectURL(blob));
         return;
       }
-    } catch {
-      /* weiter zur Browser-Ausgabe */
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(detail.message || "Sprachausgabe fehlgeschlagen.");
+    } catch (e: any) {
+      setError(e.message || "Sprachausgabe fehlgeschlagen.");
     }
-    speech.speak(text, {
-      voice: companion?.voiceName, rate: companion?.voiceRate, pitch: companion?.voicePitch, volume: companion?.voiceVolume,
-    });
   }
 
   async function send(text: string) {
@@ -286,7 +267,7 @@ export function VoiceModal({
           </div>
 
           <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
-            Spracherkennung: {sttQuelle}. Avatar: {avatarStatus}. SPARK zeigt immer an, welcher Dienst gerade wirklich läuft.
+            Spracherkennung: {sttQuelle}. Avatar: {avatarStatus}. Die Ausgabe läuft über HeyGen oder eine echte Sprach-API.
           </p>
         </div>
       </DialogContent>

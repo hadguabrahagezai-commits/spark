@@ -15,8 +15,7 @@ export type Settings = {
 };
 export type User = { id: number; email: string; name: string; goal: string; theme: string; onboarded: number };
 export type Stats = {
-  totalXp: number; streak: number; minutes: number; rank: string; rankIndex: number;
-  nextRankXp: number; rankProgress: number; days: { day: string; xp: number; minutes: number }[];
+  totalXp: number; streak: number; minutes: number; days: { day: string; xp: number; minutes: number }[];
 };
 
 type Ctx = {

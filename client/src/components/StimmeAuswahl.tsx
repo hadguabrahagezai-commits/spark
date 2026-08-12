@@ -12,13 +12,14 @@ import { API_BASE } from "@/lib/queryClient";
 export type VoiceEntry = {
   id: string;
   name: string;
+  provider?: "elevenlabs" | "heygen" | "openai";
   vorschauUrl?: string;
   kategorie?: string;
   labels?: Record<string, string>;
   beschreibung?: string;
 };
 export type VoiceListe = {
-  source: "elevenlabs" | "openai" | "browser";
+  source: "elevenlabs" | "openai";
   voices: VoiceEntry[];
   hinweis: string;
   standardStimme: string;
@@ -29,7 +30,6 @@ export type VoiceListe = {
 const QUELLE_TEXT: Record<VoiceListe["source"], string> = {
   elevenlabs: "ElevenLabs (echte Stimmen)",
   openai: "OpenAI-TTS",
-  browser: "Browser-Sprachausgabe (lokal)",
 };
 
 const PROBE_SATZ = "Hallo, ich bin dein SPARK-Companion. Schön, dass du da bist.";
@@ -48,6 +48,7 @@ export function StimmeAuswahl({ companionName }: { companionName: string }) {
   const [spielt, setSpielt] = useState<string | null>(null);
   const [klont, setKlont] = useState(false);
   const [aufnahme, setAufnahme] = useState(false);
+  const [heygenVoiceId, setHeygenVoiceId] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
 
@@ -60,7 +61,8 @@ export function StimmeAuswahl({ companionName }: { companionName: string }) {
         setStyle((s: number) => (companion?.voiceId ? s : l.regler.style));
         if (!gewaehlt && l.standardStimme) setGewaehlt(l.standardStimme);
       })
-      .catch(() => setListe({ source: "browser", voices: [], hinweis: "Stimmliste konnte nicht geladen werden.", standardStimme: "", regler: { stability: 0.5, similarity: 0.75, style: 0 } }));
+      .catch(() => setListe({ source: "openai", voices: [], hinweis: "Stimmliste konnte nicht geladen werden.", standardStimme: "", regler: { stability: 0.5, similarity: 0.75, style: 0 } }));
+    void api<any>("GET", "/api/avatar/status").then((status) => setHeygenVoiceId(status?.voiceId || "")).catch(() => {});
     return () => {
       audioRef.current?.pause();
     };
@@ -81,7 +83,7 @@ export function StimmeAuswahl({ companionName }: { companionName: string }) {
       const res = await fetch(`${API_BASE}/api/voice/tts`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ text: PROBE_SATZ, voiceId: v.id, stability, similarity, style }),
+        body: JSON.stringify({ text: PROBE_SATZ, voiceId: v.id, voiceProvider: v.provider || liste?.source, stability, similarity, style }),
       });
       const typ = res.headers.get("content-type") || "";
       if (!res.ok || typ.includes("application/json")) {
@@ -101,11 +103,11 @@ export function StimmeAuswahl({ companionName }: { companionName: string }) {
     }
   }
 
-  async function speichern(voiceId: string) {
+  async function speichern(voiceId: string, provider: "elevenlabs" | "openai" | "heygen" = liste?.source || "elevenlabs") {
     setGewaehlt(voiceId);
     await patchCompanion({
       voiceId,
-      voiceProvider: liste?.source || "browser",
+      voiceProvider: provider,
       voiceStability: stability,
       voiceSimilarity: similarity,
       voiceStyle: style,
@@ -170,7 +172,7 @@ export function StimmeAuswahl({ companionName }: { companionName: string }) {
   return (
     <div className="space-y-4" data-testid="section-stimme-live">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={liste.source === "browser" ? "secondary" : "default"} data-testid="badge-voice-source">
+        <Badge variant="default" data-testid="badge-voice-source">
           {QUELLE_TEXT[liste.source]}
         </Badge>
         <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-muted-foreground break-words">{liste.hinweis}</p>
@@ -189,7 +191,7 @@ export function StimmeAuswahl({ companionName }: { companionName: string }) {
               className={`flex items-center gap-2 rounded-md border p-2 ${gewaehlt === v.id ? "border-primary bg-primary/10" : "border-card-border bg-card"}`}
               data-testid={`row-voice-${v.id}`}
             >
-              <button className="min-w-0 flex-1 text-left" onClick={() => void speichern(v.id)} data-testid={`button-select-voice-${v.id}`}>
+              <button className="min-w-0 flex-1 text-left" onClick={() => void speichern(v.id, v.provider || liste.source)} data-testid={`button-select-voice-${v.id}`}>
                 <p className="truncate text-xs font-medium">{v.name}</p>
                 <p className="truncate text-[11px] text-muted-foreground">
                   {v.beschreibung ||
@@ -213,8 +215,18 @@ export function StimmeAuswahl({ companionName }: { companionName: string }) {
         </div>
       ) : (
         <p className="rounded-md border border-dashed border-border p-4 text-xs text-muted-foreground">
-          Keine Anbieter-Stimmen verfügbar. SPARK nutzt die Stimmen deines Browsers — die Auswahl findest du weiter unten.
+          Keine Anbieter-Stimmen verfügbar. Prüfe die ElevenLabs- oder OpenAI-Konfiguration.
         </p>
+      )}
+
+      {heygenVoiceId && (
+        <div className="rounded-md border border-card-border bg-card p-3">
+          <p className="text-sm font-medium">HeyGen Live-Stimme</p>
+          <p className="mt-1 text-xs text-muted-foreground">Diese Stimme wird ausschließlich vom HeyGen-Videoavatar mit Lippenbewegung genutzt.</p>
+          <Button className="mt-3" size="sm" variant={companion?.voiceProvider === "heygen" ? "default" : "outline"} onClick={() => void speichern(heygenVoiceId, "heygen")} data-testid="button-select-heygen-voice">
+            HeyGen-Stimme für Videoavatar nutzen
+          </Button>
+        </div>
       )}
 
       {liste.source === "elevenlabs" && (

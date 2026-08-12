@@ -68,6 +68,17 @@ app.use((req, res, next) => {
   // Startprüfung: welche Live-Dienste sind konfiguriert? (Keine Secrets im Log.)
   const { providerStatus } = await import("./llm");
   const ki = providerStatus();
+  if (!ki.aktiv) {
+    console.error(
+      `[konfiguration] KI nicht verfügbar: AI_PROVIDER=${ki.gewuenscht}; der passende API-Schlüssel fehlt oder der Anbietername ist ungültig. KI-Routen antworten mit HTTP 503.`,
+    );
+  }
+  if (!process.env.ELEVENLABS_API_KEY && !process.env.OPENAI_API_KEY) {
+    console.error("[konfiguration] Sprache nicht verfügbar: ELEVENLABS_API_KEY oder OPENAI_API_KEY fehlt. Sprachrouten antworten mit HTTP 503.");
+  }
+  if (process.env.REQUIRE_LIVE_SERVICES === "true" && (!ki.aktiv || (!process.env.ELEVENLABS_API_KEY && !process.env.OPENAI_API_KEY))) {
+    throw new Error("Pflichtdienste sind nicht konfiguriert. Prüfe AI_PROVIDER, API-Schlüssel und REQUIRE_LIVE_SERVICES.");
+  }
   log(
     `KI-Anbieter: ${ki.aktiv || "keiner konfiguriert"} · ElevenLabs ${process.env.ELEVENLABS_API_KEY ? "an" : "aus"} · ` +
       `HeyGen ${process.env.HEYGEN_API_KEY ? "an" : "aus"} · Google ${process.env.GOOGLE_CLIENT_ID ? "an" : "aus"} · ` +

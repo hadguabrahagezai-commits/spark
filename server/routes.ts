@@ -1,14 +1,14 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "node:http";
 import bcrypt from "bcryptjs";
-import { storage, today, rankFor, RANKS } from "./storage";
+import { storage, today } from "./storage";
 import { complete, completeJson, stream, llmConfigured, currentModel, providerStatus, visionJson } from "./llm";
 import type { ImageInput } from "./llm";
 import { retrieveMemories, extractMemories, addMemory } from "./memory";
 import { supabaseEnabled, supabaseStatus, syncEvent } from "./supabase";
 import { elevenConfigured } from "./voice";
 import { avatarStatus, heygenConfigured } from "./avatar";
-import { bankingStatus, parseCsv, plaidConfigured } from "./banking";
+import { bankingStatus, getRecurring, parseCsv, plaidConfigured, syncTransactions } from "./banking";
 import { googleConfigured, mapsConfigured, googleStatus, calendarEvents, gmailSummary } from "./google";
 import { registerLiveRoutes } from "./live";
 import { raw } from "./db";
@@ -44,7 +44,7 @@ function personaPrompt(userId: number, extra = "") {
     `Deine Rolle: ${p.name} — ${p.desc}`,
     tone,
     `Nutzer: ${user.name || "unbekannter Name"} (Ziel: ${user.goal}). Energielevel heute: ${s.energy}.`,
-    `Streak: ${stats.streak} Tage, Rang ${stats.rank}, ${stats.totalXp} XP. Fällige Wiederholungskarten: ${due}.`,
+    `Streak: ${stats.streak} Tage, ${stats.totalXp} aus abgeschlossenen Aktivitäten berechnete XP. Fällige Wiederholungskarten: ${due}.`,
     tasks.length ? `Offene Aufgaben heute: ${tasks.map((t) => t.title).join("; ")}.` : "Heute sind keine Aufgaben offen.",
     extra,
     "Beende jede Antwort mit einer eigenen letzten Zeile im Format [mood: freudig|neutral|nachdenklich|besorgt] — sie wird vom UI entfernt und steuert den Avatar.",
@@ -149,7 +149,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ message: "Das Passwort braucht mindestens 8 Zeichen." });
     if (storage.getUserByEmail(email)) return res.status(409).json({ message: "Diese E-Mail ist bereits registriert." });
     const user = storage.createUser(email, bcrypt.hashSync(password, 10), typeof name === "string" ? name : "");
-    storage.ensureLeaderboardEntry(user);
     const token = storage.createSession(user.id);
     void syncEvent(user.id, "registrierung", { email: user.email });
     res.json({ token, user: { ...user, password: undefined } });
@@ -160,7 +159,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = typeof email === "string" ? storage.getUserByEmail(email) : undefined;
     if (!user || typeof password !== "string" || !bcrypt.compareSync(password, user.password))
       return res.status(401).json({ message: "E-Mail oder Passwort stimmt nicht." });
-    storage.ensureLeaderboardEntry(user);
     const token = storage.createSession(user.id);
     res.json({ token, user: { ...user, password: undefined } });
   });
@@ -288,7 +286,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     let full = "";
     try {
-      const msgs = history.slice(-16).map((m) => ({ role: m.role === "assistant" ? ("assistant" as const) : ("user" as const), content: m.content || "(Anhang)" }));
+      // Mehr Gesprächskontext für lange, zusammenhängende Arbeitschats; Langzeitgedächtnis ergänzt ihn gezielt.
+      const contextWindow = Math.max(16, Math.min(80, Number(process.env.CHAT_HISTORY_MESSAGES || 48)));
+      const msgs = history.slice(-contextWindow).map((m) => ({ role: m.role === "assistant" ? ("assistant" as const) : ("user" as const), content: m.content || "(Anhang)" }));
       for await (const delta of stream(system, msgs)) {
         full += delta;
         const visible = delta.replace(/\[mood:[^\]]*\]/gi, "");
@@ -489,26 +489,19 @@ correct ist der Index der richtigen Option. Deutsch, korrekt, abwechslungsreich.
     res.json(storage.getStats(req.user!.id));
   });
 
-  /* ------------------------------------------------------------ Live-Quiz */
-  app.get("/api/live/stream", (req, res) => {
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.flushHeaders?.();
-    const names = ["Mira", "Jonas", "Alina", "Ben", "Yusuf", "Lea", "Nora", "Timo"];
-    const players = names.map((n) => ({ name: n, xp: Math.floor(Math.random() * 40) }));
-    let countdown = 20;
-    const tick = setInterval(() => {
-      countdown = countdown > 0 ? countdown - 1 : 0;
-      players.forEach((p) => { if (Math.random() > 0.55) p.xp += Math.floor(Math.random() * 25); });
-      const payload = {
-        countdown,
-        teilnehmer: players.length + 1,
-        rangliste: [...players].sort((a, b) => b.xp - a.xp),
-        hinweis: "Mitspieler-Werte werden serverseitig simuliert — dies ist kein echtes Mehrspieler-Netzwerk.",
-      };
-      res.write(`data: ${JSON.stringify(payload)}\n\n`);
-    }, 1000);
-    req.on("close", () => clearInterval(tick));
+  app.post("/api/focus/coach", auth, async (req: AuthedRequest, res) => {
+    const phase = String(req.body?.phase || "start");
+    const goal = String(req.body?.goal || "").slice(0, 500);
+    if (!goal) return res.status(400).json({ message: "Beschreibe zuerst dein Fokusziel." });
+    if (!llmConfigured()) return res.status(503).json({ message: "KI-Zugang nicht konfiguriert." });
+    try {
+      const text = await complete(
+        personaPrompt(req.user!.id, "Du bist ein Fokus-Coach. Gib eine kurze, konkrete und wertschätzende Antwort. Du kannst keine Websites oder Apps blockieren; behaupte das nie. Frage vor Erinnerungen oder externen Aktionen nach Bestätigung."),
+        [{ role: "user", content: phase === "abschluss" ? `Fokusblock beendet. Ziel: ${goal}. Führe ein kurzes Abschlussgespräch mit einer Reflexionsfrage.` : `Ich starte jetzt einen Fokusblock. Mein Ziel: ${goal}. Gib eine kurze Startanweisung und einen ersten konkreten Schritt.` }],
+        220,
+      );
+      res.json({ coach: splitMood(text).content });
+    } catch (e) { llmError(res, e); }
   });
 
   /* ------------------------------------------------------------ Missionen */
@@ -552,17 +545,6 @@ Format: {"title":"kurz","description":"1 Satz","category":"alltag|finanzen|gesun
     res.json({ card, faellig: storage.listDueCards(req.user!.id) });
   });
 
-  /* ----------------------------------------------------------- Bestenliste */
-  app.get("/api/leaderboard", auth, (req: AuthedRequest, res) => {
-    const scope = String(req.query.scope || "global");
-    storage.ensureLeaderboardEntry(req.user!);
-    const entries = storage.listLeaderboard(scope, req.user!.id);
-    const nextMonday = new Date();
-    nextMonday.setDate(nextMonday.getDate() + ((8 - nextMonday.getDay()) % 7 || 7));
-    nextMonday.setHours(0, 0, 0, 0);
-    res.json({ entries, resetAt: nextMonday.getTime(), ownUserId: req.user!.id });
-  });
-
   /* -------------------------------------------------------------- Aufgaben */
   app.get("/api/tasks", auth, (req: AuthedRequest, res) => res.json(storage.listTasks(req.user!.id)));
   app.post("/api/tasks", auth, (req: AuthedRequest, res) =>
@@ -593,6 +575,53 @@ Format: {"title":"kurz","description":"1 Satz","category":"alltag|finanzen|gesun
       missionen: storage.listMissions(user.id).filter((m) => m.status !== "geschafft").length,
       google: await heutigeGoogleDaten(user.id),
     });
+  });
+
+  /* ---------------------------------------------- Auto-Life-Manager */
+  app.post("/api/life/briefing", auth, async (req: AuthedRequest, res) => {
+    const user = req.user!;
+    if (!llmConfigured()) return res.status(503).json({ message: "KI-Zugang nicht konfiguriert." });
+    const status = googleStatus(user.id);
+    if (!status.verbunden) return res.status(409).json({ message: "Verbinde zuerst Google, damit der Auto-Life-Manager echte Kalender- und Gmail-Daten auswerten kann." });
+    const [calendar, mail] = await Promise.all([calendarEvents(user.id, 3), gmailSummary(user.id)]);
+    if (!("ok" in calendar) || !calendar.ok) return res.status(502).json({ message: "Kalenderdaten konnten nicht geladen werden." });
+    if (!("ok" in mail) || !mail.ok) return res.status(502).json({ message: "Gmail-Daten konnten nicht geladen werden." });
+    const facts = [
+      `Termine in den nächsten 3 Tagen: ${calendar.termine.map((t) => `${t.titel} (${t.start})`).join("; ") || "keine"}`,
+      `Ungelesene Mails der letzten 24 Stunden: ${mail.ungelesen}. ${mail.mails.map((m) => `${m.von}: ${m.betreff}`).join("; ") || "keine"}`,
+    ];
+    try {
+      const text = await complete(
+        personaPrompt(user.id, "Du bist der Auto-Life-Manager. Nutze nur die übergebenen Fakten. Erfinde keine Fristen, Verspätungen, Dokumente oder Termine. Nenne höchstens drei konkrete Hinweise und frage am Ende nach einer ausdrücklichen Bestätigung, bevor irgendeine Aktion vorgeschlagen wird."),
+        [{ role: "user", content: facts.join("\n") }],
+        360,
+      );
+      res.json({ briefing: splitMood(text).content, datenstand: { termine: calendar.termine.length, ungeleseneMails: mail.ungelesen } });
+    } catch (e) { llmError(res, e); }
+  });
+
+  /* ------------------------------------------------ Live-Finanz-Coach */
+  app.post("/api/finance/coach", auth, async (req: AuthedRequest, res) => {
+    const user = req.user!;
+    if (!llmConfigured()) return res.status(503).json({ message: "KI-Zugang nicht konfiguriert." });
+    const [transactions, recurring] = await Promise.all([syncTransactions(user.id), getRecurring(user.id)]);
+    if (!transactions.ok && !recurring.ok) return res.status(400).json({ message: "Verbinde zuerst eine Bank über Plaid, damit der Finanz-Coach echte Daten auswerten kann." });
+    const spend = transactions.ok ? transactions.umsaetze.filter((t) => Number(t.betrag) > 0) : [];
+    const categories = new Map<string, number>();
+    spend.forEach((t) => categories.set(t.kategorie || "Ohne Kategorie", (categories.get(t.kategorie || "Ohne Kategorie") || 0) + Number(t.betrag || 0)));
+    const facts = [
+      `Neu synchronisierte Ausgaben: ${spend.length}; Summe: ${spend.reduce((sum, t) => sum + Number(t.betrag || 0), 0).toFixed(2)} EUR.`,
+      `Kategorien: ${Array.from(categories.entries()).map(([name, value]) => `${name}: ${value.toFixed(2)} EUR`).join("; ") || "keine neuen Umsätze"}.`,
+      `Wiederkehrende Ausgaben: ${recurring.ok ? recurring.streams.filter((s) => s.richtung === "ausgabe").map((s) => `${s.name}: ${s.betrag.toFixed(2)} ${s.waehrung} (${s.frequenz})`).join("; ") || "keine erkannt" : "nicht verfügbar"}.`,
+    ];
+    try {
+      const text = await complete(
+        personaPrompt(user.id, "Du bist ein Finanz-Coach. Werte ausschließlich diese echten Bankdaten aus. Keine Anlage-, Kredit- oder Kündigungsentscheidungen behaupten. Zeige Beobachtungen klar, schlage höchstens drei freiwillige nächste Schritte vor und fordere vor jeder externen Aktion eine Bestätigung."),
+        [{ role: "user", content: `${String(req.body?.frage || "Wo kann ich diesen Monat sparen?").slice(0, 500)}\n\nDaten:\n${facts.join("\n")}` }],
+        500,
+      );
+      res.json({ antwort: splitMood(text).content, datenstand: { neueUmsaetze: spend.length, wiederkehrend: recurring.ok ? recurring.streams.length : 0 } });
+    } catch (e) { llmError(res, e); }
   });
 
   app.post("/api/today/suggestion", auth, async (req: AuthedRequest, res) => {
@@ -638,19 +667,7 @@ Format: {"title":"kurz","description":"1 Satz","category":"alltag|finanzen|gesun
           : "Google: nicht konfiguriert — Kalender und Mails fließen nicht ein",
       );
     }
-    if (!llmConfigured()) {
-      return res.json({
-        vorschlag:
-          tasks.length > 0
-            ? `Starte mit „${tasks[0].title}“ — das passt zu deinem Energielevel ${settings.energy}.`
-            : due > 0
-              ? `${due} Karten warten auf Wiederholung. 5 Minuten reichen.`
-              : "Leg eine kleine Aufgabe fest und mach den ersten Schritt.",
-        quellen,
-        schnellantworten: ["Klingt gut", "Lieber etwas anderes", "Zeig mir Details"],
-        hinweis: "Ohne KI-Zugang zeigt SPARK eine regelbasierte Empfehlung.",
-      });
-    }
+    if (!llmConfigured()) return res.status(503).json({ message: "KI-Zugang nicht konfiguriert. Prüfe AI_PROVIDER und den zugehörigen API-Schlüssel." });
     try {
       const text = await complete(
         personaPrompt(user.id, "Formuliere GENAU EINEN proaktiven Tagesvorschlag, maximal 2 Sätze. Kein Mood-Tag nötig."),
@@ -734,7 +751,6 @@ priority 1 = zuerst. Maximal 8 Einträge.`,
       gespartesGeld: Number(gespart.toFixed(2)),
       besterTag: best?.day || today(),
       besterTagGrund: best ? `${best.xp} XP und ${best.minutes} Fokusminuten an diesem Tag.` : "Noch keine Daten für diese Woche.",
-      rang: stats.rank,
       streak: stats.streak,
     });
   });
@@ -750,9 +766,6 @@ priority 1 = zuerst. Maximal 8 Einträge.`,
     storage.deleteUser(req.user!.id);
     res.json({ ok: true });
   });
-
-  /* ----------------------------------------------------------------- Ränge */
-  app.get("/api/ranks", (_req, res) => res.json({ ranks: RANKS, beispiel: rankFor(0) }));
 
   /* ---------------------------------------- Live-Dienste (Stimme, Avatar, Bank, Google) */
   registerLiveRoutes(app, auth as any);

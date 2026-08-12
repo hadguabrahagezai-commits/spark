@@ -13,7 +13,7 @@
   --font-display: 'Clash Display', 'General Sans', 'Satoshi', system-ui, sans-serif;
   --font-serif: 'Lora', Georgia, serif;
   --font-mono: 'JetBrains Mono', 'Geist Mono', Menlo, monospace;
-  --radius: 0.75rem;
+  --radius: 1rem;
   --spacing: 0.25rem;
   --tracking-normal: 0em;
 
@@ -276,6 +276,52 @@ html[data-theme='aurora'][data-contrast='hoch'] {
 body {
   background-image: var(--scanlines);
   background-attachment: fixed;
+  background-color: hsl(var(--background));
+}
+
+.spark-app-shell {
+  background:
+    radial-gradient(900px 550px at 82% -12%, hsl(var(--primary) / .11), transparent 63%),
+    radial-gradient(650px 480px at -8% 92%, hsl(var(--accent) / .09), transparent 65%),
+    hsl(var(--background));
+}
+
+.spark-sidebar { box-shadow: 18px 0 48px hsl(220 30% 2% / .12); }
+.spark-topbar { box-shadow: 0 1px 0 hsl(var(--border) / .72); }
+.spark-page-header { animation: spark-enter .38s ease-out both; }
+.spark-page > * { animation: spark-enter .4s ease-out both; }
+.spark-page > *:nth-child(2) { animation-delay: 45ms; }
+.spark-page > *:nth-child(3) { animation-delay: 90ms; }
+
+.spark-panel {
+  border: 1px solid hsl(var(--card-border) / .9);
+  background: linear-gradient(145deg, hsl(var(--card) / .96), hsl(var(--card) / .72));
+  box-shadow: 0 16px 40px hsl(220 30% 2% / .12), inset 0 1px 0 hsl(0 0% 100% / .035);
+}
+
+.spark-hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid hsl(var(--primary) / .22);
+  background: linear-gradient(132deg, hsl(var(--card)), hsl(var(--primary) / .10) 58%, hsl(var(--accent) / .10));
+  box-shadow: 0 20px 54px hsl(var(--primary) / .10);
+}
+.spark-hero::after {
+  content: "";
+  position: absolute;
+  width: 18rem;
+  height: 18rem;
+  right: -5rem;
+  top: -9rem;
+  border-radius: 999px;
+  background: hsl(var(--primary) / .14);
+  filter: blur(20px);
+  pointer-events: none;
+}
+
+@keyframes spark-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 html[data-motion='reduziert'] *,
@@ -341,6 +387,8 @@ html[data-motion='reduziert'] *::after {
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
+
+  ::selection { background: hsl(var(--primary) / .28); color: hsl(var(--foreground)); }
 }
 
 /**

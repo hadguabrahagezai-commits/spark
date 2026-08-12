@@ -4,7 +4,7 @@ import { openaiClientOrNull } from "./llm";
 /**
  * Stimme: echte Anbieter, ehrlich beschriftet.
  *
- * Fallback-Kette: ElevenLabs → OpenAI-TTS → Browser-Sprachausgabe.
+ * Fallback-Kette: ElevenLabs → OpenAI-TTS. Ohne Sprach-API gibt die Route einen Fehler zurück.
  * Alle Schlüssel kommen aus der Umgebung. Ohne Schlüssel wird nichts erfunden —
  * das UI zeigt an, welcher Modus tatsächlich läuft.
  */
@@ -23,11 +23,12 @@ export function openaiVoiceConfigured() {
   return Boolean(env("OPENAI_API_KEY"));
 }
 
-export type VoiceSource = "elevenlabs" | "openai" | "browser";
+export type VoiceSource = "elevenlabs" | "openai";
 
 export type VoiceEntry = {
   id: string;
   name: string;
+  provider?: "elevenlabs" | "heygen" | "openai";
   vorschauUrl?: string;
   kategorie?: string;
   labels?: Record<string, string>;
@@ -75,7 +76,7 @@ export async function listVoices(): Promise<VoiceListResult> {
           voices: openaiVoiceConfigured() ? OPENAI_VOICES : [],
           standardStimme: env("OPENAI_TTS_VOICE") || "alloy",
           regler,
-          hinweis: "ElevenLabs antwortete mit einem Fehler — es wird auf OpenAI bzw. den Browser ausgewichen.",
+          hinweis: openaiVoiceConfigured() ? "ElevenLabs antwortete mit einem Fehler; OpenAI-TTS ist verfügbar." : "ElevenLabs antwortete mit einem Fehler. Es steht keine Sprach-API zur Verfügung.",
           fehler: `ElevenLabs ${res.status}: ${text}`,
         };
       }
@@ -83,24 +84,32 @@ export async function listVoices(): Promise<VoiceListResult> {
       const voices: VoiceEntry[] = (data?.voices || []).map((v: any) => ({
         id: v.voice_id,
         name: v.name,
+        provider: "elevenlabs" as const,
         vorschauUrl: v.preview_url,
         kategorie: v.category,
         labels: v.labels || {},
       }));
+      const configured = [
+        ["ELEVENLABS_MALE_VOICE_ID", "ElevenLabs – männliche Standardstimme"],
+        ["ELEVENLABS_FEMALE_VOICE_ID", "ElevenLabs – weibliche Standardstimme"],
+      ].flatMap(([key, name]) => {
+        const id = env(key);
+        return id && !voices.some((voice) => voice.id === id) ? [{ id, name, provider: "elevenlabs" as const, beschreibung: `Aus ${key}` }] : [];
+      });
       return {
         source: "elevenlabs",
-        voices,
+        voices: [...configured, ...voices],
         standardStimme: env("ELEVENLABS_DEFAULT_VOICE_ID") || voices[0]?.id || "",
         regler,
         hinweis: `ElevenLabs verbunden — ${voices.length} echte Stimmen, Modell ${env("ELEVENLABS_MODEL") || "eleven_multilingual_v2"}.`,
       };
     } catch (e: any) {
       return {
-        source: "browser",
+        source: "openai",
         voices: [],
         standardStimme: "",
         regler,
-        hinweis: "ElevenLabs nicht erreichbar — SPARK nutzt die Sprachausgabe deines Browsers.",
+        hinweis: "ElevenLabs nicht erreichbar. Bitte die Verbindung oder den API-Schlüssel prüfen.",
         fehler: String(e?.message || e),
       };
     }
@@ -115,12 +124,12 @@ export async function listVoices(): Promise<VoiceListResult> {
     };
   }
   return {
-    source: "browser",
+    source: "openai",
     voices: [],
     standardStimme: "",
     regler,
     hinweis:
-      "Keine Sprach-API konfiguriert — SPARK nutzt die Stimmen deines Browsers. Für echte Stimmen ELEVENLABS_API_KEY oder OPENAI_API_KEY in die .env eintragen.",
+      "Keine Sprach-API konfiguriert. ELEVENLABS_API_KEY oder OPENAI_API_KEY in die .env eintragen.",
   };
 }
 
@@ -128,7 +137,6 @@ export type VoiceSettings = { stability?: number; similarity?: number; style?: n
 
 export type TtsStream =
   | { mode: "elevenlabs" | "openai"; body: NodeJS.ReadableStream; mimeType: string }
-  | { mode: "browser"; reason: string }
   | { mode: "fehler"; reason: string; status: number };
 
 const clamp01 = (v: unknown, d: number) => {
@@ -141,7 +149,9 @@ export async function synthesizeStream(
   text: string,
   voiceId?: string,
   settings: VoiceSettings = {},
+  preferredProvider?: "elevenlabs" | "openai",
 ): Promise<TtsStream> {
+  if (preferredProvider === "openai") return openAiTts(text, voiceId);
   if (elevenConfigured()) {
     const voice = voiceId || env("ELEVENLABS_DEFAULT_VOICE_ID");
     if (!voice) {
@@ -184,24 +194,18 @@ export async function synthesizeStream(
       return { mode: "fehler", status: 502, reason: `ElevenLabs nicht erreichbar: ${String(e?.message || e)}` };
     }
   }
-  const oa = await openAiTts(text);
-  if (oa.mode !== "browser") return oa;
-  return {
-    mode: "browser",
-    reason:
-      "Keine Sprach-API konfiguriert (ELEVENLABS_API_KEY / OPENAI_API_KEY fehlen) — SPARK spricht über die Browser-Sprachausgabe.",
-  };
+  return openAiTts(text, voiceId);
 }
 
-async function openAiTts(text: string): Promise<TtsStream> {
-  if (!openaiVoiceConfigured()) return { mode: "browser", reason: "OPENAI_API_KEY nicht gesetzt." };
+async function openAiTts(text: string, voiceId?: string): Promise<TtsStream> {
+  if (!openaiVoiceConfigured()) return { mode: "fehler", status: 503, reason: "Keine Sprach-API konfiguriert (ELEVENLABS_API_KEY / OPENAI_API_KEY fehlen)." };
   try {
     const res = await fetch(`${openaiBase()}/audio/speech`, {
       method: "POST",
       headers: { Authorization: `Bearer ${env("OPENAI_API_KEY")}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: env("OPENAI_TTS_MODEL") || "gpt-4o-mini-tts",
-        voice: env("OPENAI_TTS_VOICE") || "alloy",
+        voice: voiceId || env("OPENAI_TTS_VOICE") || "alloy",
         input: text,
         response_format: "mp3",
       }),
@@ -268,9 +272,8 @@ export async function transcribe(audioBase64: string, mimeType = "audio/webm"): 
     return {
       ok: false,
       status: 503,
-      browserFallback: true,
-      nachricht:
-        "Keine Server-Spracherkennung konfiguriert (OPENAI_API_KEY fehlt) — SPARK nutzt die Web-Speech-API deines Browsers.",
+      browserFallback: false,
+      nachricht: "Keine Server-Spracherkennung konfiguriert (OPENAI_API_KEY fehlt).",
     };
   }
   try {
@@ -286,7 +289,7 @@ export async function transcribe(audioBase64: string, mimeType = "audio/webm"): 
     return {
       ok: false,
       status: 502,
-      browserFallback: true,
+      browserFallback: false,
       nachricht: `Spracherkennung fehlgeschlagen: ${String(e?.message || e).slice(0, 200)}`,
     };
   }

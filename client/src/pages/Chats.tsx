@@ -39,6 +39,7 @@ export default function Chats() {
   const [query, setQuery] = useState("");
   const [attachment, setAttachment] = useState("");
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [voiceReply, setVoiceReply] = useState("");
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [mobileList, setMobileList] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
@@ -110,6 +111,10 @@ export default function Chats() {
         }
       }
       setAttachment("");
+      if (full.trim() && !regenerate) {
+        setVoiceReply(full);
+        setVoiceOpen(true);
+      }
     } catch (e: any) {
       if (e.name !== "AbortError") setError(e.message);
     } finally {
@@ -139,17 +144,17 @@ export default function Chats() {
   const activeChat = chats?.find((c) => c.id === activeId);
 
   return (
-    <div className="flex h-full flex-col md:flex-row">
+    <div className="spark-chat flex h-full flex-col md:flex-row">
       {/* Chatliste */}
-      <aside className={`w-full shrink-0 border-r border-border md:flex md:w-72 md:flex-col ${mobileList ? "flex flex-col" : "hidden"}`} data-testid="list-chats">
-        <div className="flex items-center gap-2 border-b border-border p-3">
+      <aside className={`w-full shrink-0 border-r border-border bg-card/30 md:flex md:w-80 md:flex-col ${mobileList ? "flex flex-col" : "hidden"}`} data-testid="list-chats">
+        <div className="flex items-center gap-2 border-b border-border p-4">
           <div className="relative flex-1">
             <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Chats durchsuchen" className="pl-8" data-testid="input-search-chats" />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Chats durchsuchen" className="h-10 rounded-xl bg-background/70 pl-8" data-testid="input-search-chats" />
           </div>
           <Button size="icon" onClick={() => void newChat()} data-testid="button-new-chat" aria-label="Neuer Chat"><Plus className="h-4 w-4" /></Button>
         </div>
-        <div className="flex-1 space-y-1 overflow-y-auto spark-scroll p-2">
+        <div className="flex-1 space-y-1.5 overflow-y-auto spark-scroll p-3">
           {!chats && <><Skeleton className="h-14 w-full" /><Skeleton className="h-14 w-full" /></>}
           {chats && filtered.length === 0 && (
             <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
@@ -158,7 +163,7 @@ export default function Chats() {
           )}
           {filtered.map((c) => (
             <div key={c.id}
-              className={`group flex cursor-pointer items-start gap-2 rounded-md border p-2.5 hover-elevate ${activeId === c.id ? "border-primary bg-primary/10" : "border-transparent"}`}
+              className={`group flex cursor-pointer items-start gap-2 rounded-xl border p-3 transition-all hover-elevate ${activeId === c.id ? "border-primary/40 bg-primary/10 shadow-sm" : "border-transparent hover:border-border"}`}
               onClick={() => { setActiveId(c.id); setMobileList(false); }}
               data-testid={`row-chat-${c.id}`}>
               <div className="min-w-0 flex-1">
@@ -184,21 +189,21 @@ export default function Chats() {
 
       {/* Chatfenster */}
       <section className={`flex min-w-0 flex-1 flex-col ${mobileList ? "hidden md:flex" : "flex"}`}>
-        <header className="flex items-center gap-2 border-b border-border px-3 py-2">
+        <header className="flex min-h-16 items-center gap-2 border-b border-border bg-background/45 px-4 py-3 backdrop-blur md:px-6">
           <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileList(true)} aria-label="Zur Chatliste" data-testid="button-back-list">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           {avatar && <SparkAvatar config={avatar} size={34} animate={false} />}
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{activeChat?.title || "Neuer Chat"}</p>
-            <p className="text-[11px] text-muted-foreground">{companion?.name || "Spark"}</p>
+            <p className="truncate text-sm font-semibold">{activeChat?.title || "Neuer Chat"}</p>
+            <p className="text-[11px] text-muted-foreground">{busy ? "Antwort wird live erstellt …" : `${companion?.name || "Spark"} · KI-Assistenz`}</p>
           </div>
           <Button variant="ghost" size="icon" className="ml-auto" onClick={() => setVoiceOpen(true)} aria-label="Sprachchat" data-testid="button-voice-open">
             <Mic className="h-4 w-4" />
           </Button>
         </header>
 
-        <div className="flex-1 space-y-4 overflow-y-auto spark-scroll p-4">
+        <div className="flex-1 space-y-5 overflow-y-auto spark-scroll p-4 md:p-7">
           {messages.length === 0 && !streaming && (
             <div className="mx-auto max-w-md py-10 text-center">
               {avatar && <SparkAvatar config={avatar} size={110} mood="freudig" className="mx-auto" />}
@@ -244,7 +249,7 @@ export default function Chats() {
           {streaming && (
             <div className="flex gap-3">
               {avatar && <SparkAvatar config={avatar} size={30} speaking amplitude={0.6} className="mt-1 shrink-0" />}
-              <div className="max-w-[85%] min-w-0 rounded-lg border border-card-border bg-card px-3 py-2">
+              <div className="max-w-[85%] min-w-0 rounded-2xl border border-card-border bg-card/90 px-4 py-3 shadow-sm">
                 <Markdown>{streaming}</Markdown>
               </div>
             </div>
@@ -261,15 +266,15 @@ export default function Chats() {
           <div ref={endRef} />
         </div>
 
-        <div className="border-t border-border p-3 pb-20 md:pb-3">
+        <div className="border-t border-border bg-background/80 p-3 pb-20 backdrop-blur-xl md:p-5 md:pb-5">
           {attachment && (
             <Badge variant="secondary" className="mb-2 gap-1">
               Anhang: {attachment}
               <button onClick={() => setAttachment("")} aria-label="Anhang entfernen"><X className="h-3 w-3" /></button>
             </Badge>
           )}
-          <div className="flex items-end gap-2">
-            <label className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-border hover-elevate" title="Datei anhängen">
+          <div className="mx-auto flex max-w-4xl items-end gap-2 rounded-2xl border border-border bg-card/85 p-2 shadow-lg shadow-black/5">
+            <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border hover-elevate" title="Datei anhängen">
               <Paperclip className="h-4 w-4" />
               <input type="file" className="hidden" data-testid="input-attachment"
                 onChange={(e) => {
@@ -281,7 +286,7 @@ export default function Chats() {
             </label>
             <Textarea
               value={input} onChange={(e) => setInput(e.target.value)} rows={1}
-              placeholder="Schreib SPARK etwas …" className="max-h-40 min-h-[38px] resize-none"
+              placeholder="Frage etwas, plane etwas oder denke laut …" className="max-h-40 min-h-[42px] resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
               data-testid="input-message"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -303,7 +308,7 @@ export default function Chats() {
         </div>
       </section>
 
-      <VoiceModal open={voiceOpen} onOpenChange={setVoiceOpen} chatId={activeId} onExchange={() => activeId && loadMessages(activeId)} />
+      <VoiceModal open={voiceOpen} onOpenChange={(value) => { setVoiceOpen(value); if (!value) setVoiceReply(""); }} chatId={activeId} initialText={voiceReply} onExchange={() => activeId && loadMessages(activeId)} />
     </div>
   );
 }

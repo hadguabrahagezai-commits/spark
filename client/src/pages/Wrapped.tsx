@@ -8,7 +8,7 @@ import { useApp } from "@/state";
 
 type Wrapped = {
   lernminuten: number; xp: number; aktiveTage: number; geloesteAufgaben: number;
-  gespartesGeld: number; besterTag: string; besterTagGrund: string; rang: string; streak: number;
+  gespartesGeld: number; besterTag: string; besterTagGrund: string; streak: number;
 };
 
 export default function WrappedPage() {
@@ -27,7 +27,7 @@ export default function WrappedPage() {
         { title: "Erledigt", value: `${data.geloesteAufgaben} Aufgaben`, sub: "Kleine Schritte, echte Wirkung." },
         { title: "Gespart", value: `${data.gespartesGeld.toFixed(2)} €`, sub: "aus deaktivierten Abos, monatlich" },
         { title: "Bester Tag", value: new Date(data.besterTag).toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" }), sub: data.besterTagGrund },
-        { title: "Dein Rang", value: data.rang, sub: "Ein Funke reicht — weiter so." },
+        { title: "Deine Serie", value: `${data.streak} Tage`, sub: "Auf Basis deiner erfassten Aktivitäten." },
       ]
     : [];
 
@@ -55,7 +55,7 @@ export default function WrappedPage() {
         `${data.xp} XP`,
         `${data.geloesteAufgaben} Aufgaben erledigt`,
         `${data.gespartesGeld.toFixed(2)} € gespart`,
-        `Rang: ${data.rang}`,
+        `Streak: ${data.streak} Tage`,
       ];
       ctx.font = "bold 52px sans-serif";
       lines.forEach((l, i) => {

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Brain, CalendarCheck, Flame, LayoutDashboard, ListChecks, LogOut, Menu, MessageSquare,
-  PanelLeftClose, PanelLeftOpen, Repeat, Search, Settings, Sparkles, Trophy, User as UserIcon, Wallet,
+  PanelLeftClose, PanelLeftOpen, Repeat, Search, Settings, Sparkles, User as UserIcon, Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +22,6 @@ export const NAV = [
   { href: "/missionen", label: "Missionen", icon: ListChecks },
   { href: "/chats", label: "Chats", icon: MessageSquare },
   { href: "/wiederholung", label: "Wiederholung", icon: Repeat },
-  { href: "/bestenliste", label: "Bestenliste", icon: Trophy },
   { href: "/finanzen", label: "Finanzen", icon: Wallet },
 ];
 
@@ -55,10 +54,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     : null;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-foreground">
+    <div className="spark-app-shell flex h-screen overflow-hidden bg-background text-foreground">
       {/* Sidebar (Desktop) */}
       <aside
-        className={`hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 md:flex ${collapsed ? "w-[68px]" : "w-60"}`}
+        className={`spark-sidebar hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-300 md:flex ${collapsed ? "w-[76px]" : "w-64"}`}
         data-testid="nav-sidebar"
       >
         <div className="flex h-14 items-center justify-between px-3">
@@ -73,7 +72,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             return (
               <Link key={item.href} href={item.href}>
                 <span
-                  className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm hover-elevate ${active ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground" : "text-sidebar-foreground/80"}`}
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200 hover-elevate ${active ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground shadow-sm" : "text-sidebar-foreground/80"}`}
                   data-testid={`link-nav-${item.label.toLowerCase()}`}
                   title={item.label}
                 >
@@ -87,7 +86,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {EXTRA.slice(0, 2).map((item) => (
             <Link key={item.href} href={item.href}>
               <span
-                className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm hover-elevate ${location === item.href ? "bg-sidebar-accent font-medium" : "text-sidebar-foreground/80"}`}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all hover-elevate ${location === item.href ? "bg-sidebar-accent font-medium" : "text-sidebar-foreground/80"}`}
                 data-testid={`link-nav-${item.label.toLowerCase()}`}
               >
                 <item.icon className="h-4 w-4 shrink-0" />
@@ -97,22 +96,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
         {!collapsed && (
-          <div className="m-2 rounded-md border border-sidebar-border bg-sidebar-accent/40 p-3">
-            <p className="text-xs text-muted-foreground">Rang</p>
-            <p className="text-sm font-semibold">{stats?.rank || "Funke"}</p>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${stats?.rankProgress || 0}%` }} />
-            </div>
+          <div className="m-3 rounded-2xl border border-sidebar-border bg-sidebar-accent/40 p-4 shadow-sm">
+            <p className="text-xs text-muted-foreground">Aktivität</p>
+            <p className="text-sm font-semibold">{stats?.totalXp ?? 0} XP</p>
+            <p className="mt-1 text-xs text-muted-foreground">aus deinen eigenen Daten</p>
           </div>
         )}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Topbar */}
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/85 px-3 backdrop-blur md:px-5">
+        <header className="spark-topbar sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-border bg-background/75 px-3 backdrop-blur-xl md:px-6">
           <div className="md:hidden"><Link href="/"><SparkLogo compact /></Link></div>
           <button
-            className="ml-auto flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-card px-3 text-left text-sm text-muted-foreground hover-elevate md:ml-0 md:max-w-sm"
+            className="ml-auto flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-card/80 px-3 text-left text-sm text-muted-foreground shadow-sm hover-elevate md:ml-0 md:max-w-sm"
             onClick={() => setPaletteOpen(true)}
             data-testid="button-search"
           >
@@ -223,10 +220,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: React.ReactNode }) {
   return (
-    <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+    <div className="spark-page-header mb-7 flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="font-display text-xl font-semibold tracking-tight" data-testid="text-page-title">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+        <h1 className="font-display text-2xl font-semibold tracking-[-0.03em] md:text-3xl" data-testid="text-page-title">{title}</h1>
+        {subtitle && <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">{subtitle}</p>}
       </div>
       {action}
     </div>
@@ -234,5 +231,5 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
 }
 
 export function Page({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto w-full max-w-6xl px-4 pb-28 pt-5 md:px-6 md:pb-10 md:pt-7">{children}</div>;
+  return <div className="spark-page mx-auto w-full max-w-7xl px-4 pb-28 pt-6 md:px-8 md:pb-12 md:pt-9">{children}</div>;
 }

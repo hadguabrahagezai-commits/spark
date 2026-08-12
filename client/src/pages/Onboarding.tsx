@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft, ArrowRight, Brain, Check, Eye, EyeOff, Loader2, Mic, Palette, Sparkles, Square,
-  Upload, Volume2, Wallet, Info,
+  Upload, Volume2, Wallet, Info, CalendarDays, Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import type { AvatarConfig } from "@/components/Avatar";
 import { rawApi, useApp } from "@/state";
 import { StimmeAuswahl } from "@/components/StimmeAuswahl";
 import { LiveAvatarAuswahl } from "@/components/LiveAvatarAuswahl";
+import { BankVerbinden } from "@/components/BankVerbinden";
 import { useToast } from "@/hooks/use-toast";
 
 const GOALS = [
@@ -106,6 +107,7 @@ export default function Onboarding() {
   const [recording, setRecording] = useState(false);
   const [consentDone, setConsentDone] = useState(false);
   const [googleReady, setGoogleReady] = useState(false);
+  const [googleConnected, setGoogleConnected] = useState(false);
   const recRef = useRef<MediaRecorder | null>(null);
   const speech = useSpeech();
 
@@ -118,12 +120,19 @@ export default function Onboarding() {
   }, []);
 
   useEffect(() => {
+    if (!token) return;
+    void rawApi<any>("GET", "/api/google/status", undefined, token)
+      .then((status) => setGoogleConnected(Boolean(status?.verbunden)))
+      .catch(() => setGoogleConnected(false));
+  }, [token]);
+
+  useEffect(() => {
     if (token && user && step < 2) setStep(user.onboarded ? 4 : 2);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, user]);
 
   useEffect(() => {
-    if (companion && step === 4) {
+    if (companion && step === 5) {
       setConfig({ preset: companion.preset, style: companion.style, skin: companion.skin, hair: companion.hair, hairstyle: companion.hairstyle, eyes: companion.eyes, outfit: companion.outfit });
       setPersonality(companion.personality);
       setDirectness(companion.directness); setVerbosity(companion.verbosity); setHumor(companion.humor);
@@ -168,6 +177,11 @@ export default function Onboarding() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function connectGoogle() {
+    if (!token) return;
+    window.location.assign(`/api/google/auth?token=${encodeURIComponent(token)}`);
   }
 
   function previewLine() {
@@ -250,7 +264,7 @@ export default function Onboarding() {
     }
   }
 
-  const totalSteps = 5;
+  const totalSteps = 7;
   const progress = ((step + 1) / totalSteps) * 100;
 
   /* ------------------------------------------------------------ Start */
@@ -364,6 +378,31 @@ export default function Onboarding() {
         )}
 
         {step === 2 && (
+          <div className="mx-auto max-w-2xl">
+            <h2 className="font-display text-xl font-semibold">Konten verbinden</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Google und Bank sind freiwillig. Für beide werden ausschließlich echte, von dir freigegebene Kontodaten verwendet.</p>
+            <div className="mt-6 space-y-4">
+              <section className="rounded-lg border border-card-border bg-card p-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <CalendarDays className="h-5 w-5 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">Gmail & Google Kalender</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Google verlangt deine ausdrückliche Freigabe. Danach werden Kalendertermine und ungelesene E-Mails direkt über die Google-APIs geladen.</p>
+                  </div>
+                  {googleConnected ? <Badge>Verbunden</Badge> : <Button size="sm" disabled={!googleReady} onClick={connectGoogle} data-testid="button-onboarding-connect-google">Mit Google verbinden</Button>}
+                </div>
+                {!googleReady && <p className="mt-3 text-xs text-destructive">Google OAuth ist auf diesem Server noch nicht konfiguriert.</p>}
+              </section>
+              <section className="rounded-lg border border-card-border bg-card p-4">
+                <div className="mb-3 flex items-center gap-2"><Building2 className="h-5 w-5 text-primary" /><p className="text-sm font-medium">Bankverbindung</p></div>
+                <BankVerbinden onSkip={() => setStep(3)} />
+                <p className="mt-3 text-xs text-muted-foreground">Die Bankverbindung ist optional. Plaid Link öffnet sich nur nach Klick auf „Bank verbinden“; du kannst diesen Schritt unten überspringen und später im Profil nachholen.</p>
+              </section>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
           <div>
             <h2 className="font-display text-xl font-semibold">Worauf soll SPARK zuerst schauen?</h2>
             <p className="mt-1 text-sm text-muted-foreground">Du kannst das jederzeit ändern.</p>
@@ -384,7 +423,7 @@ export default function Onboarding() {
           </div>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <div>
             <h2 className="font-display text-xl font-semibold">Wähle dein Design</h2>
             <p className="mt-1 text-sm text-muted-foreground">Vorschau beim Überfahren, Auswahl per Klick.</p>
@@ -419,7 +458,7 @@ export default function Onboarding() {
           </div>
         )}
 
-        {step === 4 && (
+        {step === 5 && (
           <div>
             <h2 className="font-display text-xl font-semibold">Dein Companion</h2>
             <p className="mt-1 text-sm text-muted-foreground">Gesicht, Charakter und Stimme — alles änderbar.</p>
@@ -588,6 +627,14 @@ export default function Onboarding() {
             </div>
           </div>
         )}
+
+        {step === 6 && (
+          <div className="mx-auto max-w-2xl rounded-lg border border-card-border bg-card p-6 text-center">
+            <Check className="mx-auto h-8 w-8 text-primary" />
+            <h2 className="mt-3 font-display text-xl font-semibold">Alles bereit</h2>
+            <p className="mt-2 text-sm text-muted-foreground">Dein Profil ist eingerichtet. Verbindungen, die du übersprungen hast, bleiben jederzeit im Profil verfügbar.</p>
+          </div>
+        )}
       </div>
 
       <footer className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
@@ -597,15 +644,12 @@ export default function Onboarding() {
           </Button>
         )}
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          {step === 4 && (
-            <Button variant="ghost" size="sm" onClick={() => void finish(true)} data-testid="button-later">Später einrichten</Button>
-          )}
-          {step >= 2 && step < 4 && (
-            <Button onClick={() => setStep((s) => s + 1)} data-testid="button-next">
-              Weiter <ArrowRight className="ml-1 h-4 w-4" />
+          {step >= 2 && step < 6 && (
+            <Button onClick={() => setStep((s) => s + 1)} data-testid={step === 2 ? "button-skip-integrations" : "button-next"}>
+              {step === 2 ? "Ohne Verbindung fortfahren" : "Weiter"} <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
           )}
-          {step === 4 && (
+          {step === 6 && (
             <Button onClick={() => void finish(false)} disabled={busy} data-testid="button-finish">
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Los geht's
             </Button>

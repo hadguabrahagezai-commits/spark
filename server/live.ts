@@ -197,12 +197,17 @@ export function registerLiveRoutes(app: Express, auth: RequestHandler) {
     const text = String(req.body?.text || "").slice(0, 2500);
     if (!text) return res.status(400).json({ message: "Kein Text übergeben." });
     const companion = storage.getCompanion(req.user!.id);
-    const result = await synthesizeStream(text, req.body?.voiceId || companion.voiceId || undefined, {
+    // HeyGen-Voice-IDs gelten ausschließlich für den Live-Avatar und werden nie an ElevenLabs/OpenAI gesendet.
+    const requestedVoice = String(req.body?.voiceId || "");
+    const provider = req.body?.voiceProvider === "openai" || req.body?.voiceProvider === "elevenlabs"
+      ? req.body.voiceProvider
+      : companion.voiceProvider === "openai" || companion.voiceProvider === "elevenlabs" ? companion.voiceProvider : undefined;
+    const voiceId = requestedVoice || (provider ? companion.voiceId : undefined);
+    const result = await synthesizeStream(text, voiceId || undefined, {
       stability: zahl(req.body?.stability) ?? companion.voiceStability,
       similarity: zahl(req.body?.similarity) ?? companion.voiceSimilarity,
       style: zahl(req.body?.style) ?? companion.voiceStyle,
-    });
-    if (result.mode === "browser") return res.status(200).json({ mode: "browser", reason: result.reason });
+    }, provider);
     if (result.mode === "fehler") return res.status(result.status || 502).json({ mode: "fehler", message: result.reason });
     res.setHeader("Content-Type", result.mimeType);
     res.setHeader("X-Spark-Voice-Source", result.mode);
@@ -252,7 +257,7 @@ export function registerLiveRoutes(app: Express, auth: RequestHandler) {
     const companion = storage.getCompanion(req.user!.id);
     const result = await createSessionToken({
       avatarId: req.body?.avatarId || companion.liveAvatarId || undefined,
-      voiceId: req.body?.voiceId || undefined,
+      voiceId: req.body?.voiceId || (companion.voiceProvider === "heygen" ? companion.voiceId : undefined),
       stability: companion.voiceStability,
       similarity: companion.voiceSimilarity,
       style: companion.voiceStyle,
@@ -382,7 +387,6 @@ export function registerLiveRoutes(app: Express, auth: RequestHandler) {
         let user = prof.email ? storage.getUserByEmail(prof.email) : undefined;
         if (!user) user = storage.createUser(prof.email || `google-${prof.id}@spark.local`, bcrypt.hashSync(crypto.randomUUID(), 10), prof.name || "");
         storage.updateUser(user.id, { googleId: prof.id || "" });
-        storage.ensureLeaderboardEntry(user);
         userId = user.id;
       }
       tokenStore.save(userId, { ...tokens, email: prof.email || "" } as any);

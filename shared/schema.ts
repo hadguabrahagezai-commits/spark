@@ -208,16 +208,6 @@ export const xpEvents = sqliteTable("xp_events", {
   createdAt: integer("created_at").notNull(),
 });
 
-export const leaderboard = sqliteTable("leaderboard", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("user_id"),
-  name: text("name").notNull(),
-  scope: text("scope").notNull().default("global"),
-  xp: integer("xp").notNull().default(0),
-  avatarSeed: text("avatar_seed").notNull().default("a"),
-  isSeed: integer("is_seed").notNull().default(1),
-});
-
 export type User = typeof users.$inferSelect;
 export type Companion = typeof companions.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
@@ -234,7 +224,6 @@ export type Subscription = typeof subscriptions.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type Streak = typeof streaks.$inferSelect;
 export type XpEvent = typeof xpEvents.$inferSelect;
-export type LeaderboardEntry = typeof leaderboard.$inferSelect;
 
 export type InsertUser = typeof users.$inferInsert;
 export type InsertChat = typeof chats.$inferInsert;
