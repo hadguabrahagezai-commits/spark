@@ -19,7 +19,6 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",
     "@google/genai": "^2.16.0",
-    
     "@hookform/resolvers": "^5.4.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@radix-ui/react-accordion": "^1.2.4",
@@ -79,7 +78,7 @@
     "react-hook-form": "^7.55.0",
     "react-icons": "^5.4.0",
     "react-markdown": "^10.1.0",
-    
+    "react-plaid-link": "^5.0.0",
     "react-resizable-panels": "^2.1.7",
     "recharts": "^2.15.2",
     "remark-gfm": "^4.0.1",
