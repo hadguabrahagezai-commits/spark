@@ -4,17 +4,20 @@ import {
   ArrowLeft, Check, Copy, Mic, Paperclip, Pin, PinOff, Plus, RefreshCw, Search, Send,
   Square, ThumbsDown, ThumbsUp, Trash2, X,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Markdown } from "@/components/Markdown";
-import { SparkAvatar } from "@/components/Avatar";
-import { VoiceModal } from "@/components/VoiceModal";
-import { useApp } from "@/state";
-import { API_BASE } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Textarea } from "../components/ui/textarea";
+import { Badge } from "../components/ui/badge";
+import { Skeleton } from "../components/ui/skeleton";
+import { Markdown } from "../components/Markdown";
+import JarvisSphere from "../components/JarvisSphere";
+import { useSpeech } from "../components/Avatar";
+import { VoiceModal } from "../components/VoiceModal";
+import CommandBar from "../components/CommandBar";
+import SmartFrame from "../components/SmartFrame";
+import { useApp } from "../state";
+import { API_BASE } from "../lib/queryClient";
+import { useToast } from "../hooks/use-toast";
 
 type ChatRow = { id: number; title: string; pinned: number; updatedAt: number; preview: string; count: number };
 type Msg = { id: number; role: string; content: string; mood: string; rating: number; attachment: string };
@@ -29,6 +32,7 @@ const STARTERS = [
 export default function Chats() {
   const { api, token, companion, refresh } = useApp();
   const { toast } = useToast();
+  const speech = useSpeech();
   const [chats, setChats] = useState<ChatRow[] | null>(null);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -40,12 +44,13 @@ export default function Chats() {
   const [attachment, setAttachment] = useState("");
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [voiceReply, setVoiceReply] = useState("");
+  const [smartUrl, setSmartUrl] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [mobileList, setMobileList] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
-  const avatar = companion && { preset: companion.preset, style: companion.style, skin: companion.skin, hair: companion.hair, hairstyle: companion.hairstyle, eyes: companion.eyes, outfit: companion.outfit };
+  const avatar = Boolean(companion);
 
   async function loadChats(select?: number) {
     const list = await api<ChatRow[]>("GET", "/api/chats");
@@ -113,7 +118,20 @@ export default function Chats() {
       setAttachment("");
       if (full.trim() && !regenerate) {
         setVoiceReply(full);
-        setVoiceOpen(true);
+        // Check assistant text for implicit actions (open/search)
+        try {
+          const p = await fetch(`${API_BASE}/api/action/parse`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ text: full }),
+          });
+          if (p.ok) {
+            const js = await p.json();
+            if (js.ok && (js.kind === "url" || js.kind === "search") && js.url) {
+              setSmartUrl(js.url);
+            }
+          }
+        } catch {}
       }
     } catch (e: any) {
       if (e.name !== "AbortError") setError(e.message);
@@ -193,20 +211,31 @@ export default function Chats() {
           <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileList(true)} aria-label="Zur Chatliste" data-testid="button-back-list">
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          {avatar && <SparkAvatar config={avatar} size={34} animate={false} />}
+          {avatar && <JarvisSphere size={34} className="ml-0" speaking={speech.speaking} amplitude={speech.amplitude} />}
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{activeChat?.title || "Neuer Chat"}</p>
             <p className="text-[11px] text-muted-foreground">{busy ? "Antwort wird live erstellt …" : `${companion?.name || "Spark"} · KI-Assistenz`}</p>
           </div>
-          <Button variant="ghost" size="icon" className="ml-auto" onClick={() => setVoiceOpen(true)} aria-label="Sprachchat" data-testid="button-voice-open">
+          <div className="ml-4 hidden w-full md:block">
+            <CommandBar onAction={async (t) => {
+              try {
+                const r = await fetch(`${API_BASE}/api/action/parse`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ text: t }) });
+                if (!r.ok) return;
+                const j = await r.json();
+                if (j.ok && (j.kind === "url" || j.kind === "search") && j.url) setSmartUrl(j.url);
+              } catch {}
+            }} />
+          </div>
+          <Button variant="ghost" size="icon" className="ml-auto" onClick={() => { setVoiceReply((prev) => prev || ""); setVoiceOpen(true); }} aria-label="Sprachchat" data-testid="button-voice-open">
             <Mic className="h-4 w-4" />
           </Button>
         </header>
 
-        <div className="flex-1 space-y-5 overflow-y-auto spark-scroll p-4 md:p-7">
+        <div className="flex-1 overflow-y-auto spark-scroll p-4 md:p-7">
+          <div className="mx-auto w-full max-w-2xl space-y-5">
           {messages.length === 0 && !streaming && (
             <div className="mx-auto max-w-md py-10 text-center">
-              {avatar && <SparkAvatar config={avatar} size={110} mood="freudig" className="mx-auto" />}
+              <div className="mx-auto"><JarvisSphere size={110} speaking={speech.speaking} amplitude={speech.amplitude} /></div>
               <p className="mt-3 text-sm text-muted-foreground">Womit soll ich anfangen?</p>
               <div className="mt-4 grid gap-2">
                 {STARTERS.map((s) => (
@@ -221,8 +250,8 @@ export default function Chats() {
             {messages.map((m) => (
               <motion.div key={m.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}
                 className={`flex gap-3 ${m.role === "user" ? "justify-end" : ""}`} data-testid={`message-${m.id}`}>
-                {m.role !== "user" && avatar && <SparkAvatar config={avatar} size={30} animate={false} className="mt-1 shrink-0" />}
-                <div className={`max-w-[85%] min-w-0 rounded-lg border px-3 py-2 ${m.role === "user" ? "border-primary/40 bg-primary/10" : "border-card-border bg-card"}`}>
+                {m.role !== "user" && avatar && <div className="mt-1 shrink-0"><JarvisSphere size={30} speaking={speech.speaking} amplitude={speech.amplitude} /></div>}
+                  <div className={`max-w-[75%] min-w-0 rounded-2xl px-4 py-3 ${m.role === "user" ? "ml-auto bg-[#0B1220] text-white" : "bg-[#0F1720] text-white"}`}>
                   {m.attachment && <Badge variant="secondary" className="mb-1.5 text-[10px]">Anhang: {m.attachment}</Badge>}
                   {m.role === "user" ? <p className="whitespace-pre-wrap text-sm">{m.content}</p> : <Markdown>{m.content}</Markdown>}
                   {m.role === "assistant" && (
@@ -245,11 +274,12 @@ export default function Chats() {
               </motion.div>
             ))}
           </AnimatePresence>
+          </div>
 
           {streaming && (
             <div className="flex gap-3">
-              {avatar && <SparkAvatar config={avatar} size={30} speaking amplitude={0.6} className="mt-1 shrink-0" />}
-              <div className="max-w-[85%] min-w-0 rounded-2xl border border-card-border bg-card/90 px-4 py-3 shadow-sm">
+              {avatar && <div className="mt-1 shrink-0"><JarvisSphere size={30} speaking={speech.speaking} amplitude={speech.amplitude} /></div>}
+              <div className="max-w-[75%] min-w-0 rounded-2xl bg-[#0F1720] px-4 py-3">
                 <Markdown>{streaming}</Markdown>
               </div>
             </div>
@@ -266,8 +296,8 @@ export default function Chats() {
           <div ref={endRef} />
         </div>
 
-        <div className="border-t border-border bg-background/80 p-3 pb-20 backdrop-blur-xl md:p-5 md:pb-5">
-          {attachment && (
+        <div className="border-t border-transparent bg-transparent p-3 pb-20 md:p-5 md:pb-5">
+            {attachment && (
             <Badge variant="secondary" className="mb-2 gap-1">
               Anhang: {attachment}
               <button onClick={() => setAttachment("")} aria-label="Anhang entfernen"><X className="h-3 w-3" /></button>
@@ -309,6 +339,7 @@ export default function Chats() {
       </section>
 
       <VoiceModal open={voiceOpen} onOpenChange={(value) => { setVoiceOpen(value); if (!value) setVoiceReply(""); }} chatId={activeId} initialText={voiceReply} onExchange={() => activeId && loadMessages(activeId)} />
+      {smartUrl && <SmartFrame url={smartUrl} onClose={() => setSmartUrl(null)} />}
     </div>
   );
 }

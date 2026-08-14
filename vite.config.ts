@@ -4,7 +4,7 @@ import path from "node:path";
 
 /**
  * Manche Fremdpakete (hier: das in `livekit-client` fest eingebaute `loglevel`,
- * das über das HeyGen-Live-Avatar-SDK hereinkommt) speichern ihre Log-Stufe in
+ * das in manchen Live-Avatar-SDKs verwendet wird) speichern ihre Log-Stufe in
  * `localStorage` bzw. `document.cookie`. Beides ist in der Vorschau-Iframe der
  * Plattform blockiert. Dieses Plugin ersetzt solche Zugriffe in
  * node_modules-Code durch einen speicherfreien Ersatz — rein kosmetische

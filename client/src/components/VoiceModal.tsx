@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Loader2, Mic, MicOff, Square, Video } from "lucide-react";
-import { SparkAvatar, useSpeech } from "@/components/Avatar";
-import type { Mood } from "@/components/Avatar";
-import { useApp } from "@/state";
-import { API_BASE } from "@/lib/queryClient";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
+import { useSpeech } from "./Avatar";
+import JarvisSphere from "./JarvisSphere";
+import type { Mood } from "./Avatar";
+import { useApp } from "../state";
+import { API_BASE } from "../lib/queryClient";
 
-type AvatarModus = "heygen" | "svg";
+type AvatarModus = "svg" | "image";
 
 export function VoiceModal({
   open, onOpenChange, chatId, onExchange, initialText,
@@ -33,12 +34,10 @@ export function VoiceModal({
   const [verbindeAvatar, setVerbindeAvatar] = useState(false);
   const recRef = useRef<any>(null);
   const mediaRef = useRef<MediaRecorder | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const sessionRef = useRef<any>(null);
 
   const avatar = companion && {
     preset: companion.preset, style: companion.style, skin: companion.skin, hair: companion.hair,
-    hairstyle: companion.hairstyle, eyes: companion.eyes, outfit: companion.outfit,
+    hairstyle: companion.hairstyle, eyes: companion.eyes, outfit: companion.outfit, image: (companion.preset && companion.avatarMode === "image") ? `/assets/avatars/${companion.preset}.svg` : undefined,
   };
 
   useEffect(() => {
@@ -49,7 +48,6 @@ export function VoiceModal({
       return;
     }
     void (async () => {
-      await startAvatar();
       if (initialText?.trim()) {
         setAnswer(initialText);
         await sprich(initialText);
@@ -58,41 +56,8 @@ export function VoiceModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  /* ------------------------------------------------------ HeyGen Live-Avatar */
-
-  async function startAvatar(): Promise<boolean> {
-    setVerbindeAvatar(true);
-    setAvatarStatus("HeyGen wird verbunden …");
-    try {
-      const res = await api<any>("POST", "/api/avatar/token", {});
-      const mod = await import("@heygen/liveavatar-web-sdk");
-      const session = new mod.LiveAvatarSession(res.token, { voiceChat: false });
-      sessionRef.current = session;
-      await session.start();
-      setModus("heygen");
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      if (!videoRef.current) throw new Error("HeyGen-Videoelement konnte nicht bereitgestellt werden.");
-      session.attach(videoRef.current);
-      setAvatarStatus("HeyGen Live");
-      return true;
-    } catch (e: any) {
-      sessionRef.current = null;
-      setModus("svg");
-      setAvatarStatus("SPARK-Avatar (lokal)");
-      setError(`Live-Avatar nicht verfügbar: ${e.message}`);
-      return false;
-    } finally {
-      setVerbindeAvatar(false);
-    }
-  }
-
+  /* Local/premium avatar only; external Live-Avatar removed. */
   async function stopAvatar() {
-    try {
-      await sessionRef.current?.stop();
-    } catch {
-      /* Sitzung war bereits beendet */
-    }
-    sessionRef.current = null;
     setModus("svg");
   }
 
@@ -145,14 +110,7 @@ export function VoiceModal({
   /* -------------------------------------------------------------- Sprechen */
 
   async function sprich(text: string) {
-    if (sessionRef.current) {
-      try {
-        await sessionRef.current.repeat(text);
-        return;
-      } catch {
-        /* weiter zu TTS */
-      }
-    }
+    // No external live-avatar session: always use TTS/audio.
     try {
       const res = await fetch(`${API_BASE}/api/voice/tts`, {
         method: "POST",
@@ -166,6 +124,15 @@ export function VoiceModal({
         return;
       }
       const detail = await res.json().catch(() => ({}));
+      if (detail.mode === "browser") {
+        speech.speak(detail.text || text, {
+          voice: companion?.voiceName || undefined,
+          rate: companion?.voiceRate || 1,
+          pitch: companion?.voicePitch || 1,
+          volume: companion?.voiceVolume || 1,
+        });
+        return;
+      }
       throw new Error(detail.message || "Sprachausgabe fehlgeschlagen.");
     } catch (e: any) {
       setError(e.message || "Sprachausgabe fehlgeschlagen.");
@@ -216,17 +183,9 @@ export function VoiceModal({
           <DialogTitle className="text-base">Sprachchat mit {companion?.name || "Spark"}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col items-center gap-3">
-          {modus === "heygen" ? (
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              className="h-[200px] w-[200px] rounded-full border border-card-border bg-black object-cover"
-              data-testid="video-heygen"
-            />
-          ) : (
-            avatar && <SparkAvatar config={avatar} size={200} mood={mood} speaking={speech.speaking} amplitude={speech.amplitude} />
-          )}
+          {avatar ? (
+                <div className="mx-auto"><JarvisSphere size={200} speaking={speech.speaking} /></div>
+          ) : null}
 
           <div className="flex flex-wrap justify-center gap-2">
             <Badge variant={listening ? "default" : "secondary"}>
@@ -259,15 +218,15 @@ export function VoiceModal({
             <Button variant="outline" onClick={() => speech.stop()} disabled={!speech.speaking} data-testid="button-voice-stop-speech">
               <Square className="mr-1 h-4 w-4" /> Ausgabe stoppen
             </Button>
-            {companion?.avatarMode === "heygen" && modus !== "heygen" && (
-              <Button variant="secondary" onClick={() => void startAvatar()} disabled={verbindeAvatar} data-testid="button-avatar-retry">
-                Live-Avatar erneut verbinden
+            {companion?.avatarMode === "image" && (
+              <Button variant="secondary" onClick={() => setModus("image")} disabled={verbindeAvatar} data-testid="button-avatar-retry">
+                Premium Avatar aktivieren
               </Button>
             )}
           </div>
 
           <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
-            Spracherkennung: {sttQuelle}. Avatar: {avatarStatus}. Die Ausgabe läuft über HeyGen oder eine echte Sprach-API.
+            Spracherkennung: {sttQuelle}. Avatar: {avatarStatus}. Die Ausgabe läuft über Browser-TTS oder eine konfigurierte Server-TTS.
           </p>
         </div>
       </DialogContent>

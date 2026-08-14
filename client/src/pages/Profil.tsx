@@ -1,8 +1,9 @@
 import { CalendarDays, Flame, Sparkles } from "lucide-react";
-import { Page, PageHeader } from "@/components/Layout";
-import { SparkAvatar } from "@/components/Avatar";
-import { BankVerbinden } from "@/components/BankVerbinden";
-import { useApp } from "@/state";
+import { Page, PageHeader } from "../components/Layout";
+import { SparkAvatar } from "../components/Avatar";
+import JarvisSphere from "../components/JarvisSphere";
+import { BankVerbinden } from "../components/BankVerbinden";
+import { useApp } from "../state";
 
 function Heatmap({ days }: { days: { day: string; xp: number }[] }) {
   const activity = new Map(days.map((day) => [day.day, day.xp]));
@@ -28,7 +29,7 @@ export default function Profil() {
   return <Page>
     <PageHeader title="Profil" subtitle="Dein Fortschritt und deine Verbindungen an einem Ort." />
     <div className="spark-hero flex flex-wrap items-center gap-4 rounded-2xl p-6">
-      {avatar && <SparkAvatar config={avatar} size={90} mood="freudig" />}
+      {avatar && <JarvisSphere size={90} />}
       <div className="min-w-0">
         <p className="font-display text-lg font-semibold">{user?.name || user?.email}</p>
         <p className="mt-1 text-sm text-muted-foreground">{stats?.totalXp ?? 0} XP aus deinen abgeschlossenen Aktivitäten</p>

@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
@@ -11,13 +12,14 @@ import OpenAI from "openai";
  * die Aufrufer bekommen einen klaren Fehler und das UI beschriftet das ehrlich.
  */
 
-export type ProviderId = "gemini" | "openai" | "anthropic";
+export type ProviderId = "gemini" | "openai" | "anthropic" | "groq";
 
 export type ChatMsg = { role: "user" | "assistant"; content: string };
 /** Bildeingabe für Scan-zu-Quiz: reines Base64 ohne data:-Präfix. */
 export type ImageInput = { base64: string; mimeType: string };
 
 const env = (k: string) => (process.env[k] || "").trim();
+const GROQ_SYSTEM_INSTRUCTION = fs.readFileSync(new URL("./groq_system_instruction.txt", import.meta.url), "utf8").trim();
 
 export const MODELS = {
   get gemini() {
@@ -29,18 +31,25 @@ export const MODELS = {
   get anthropic() {
     return env("ANTHROPIC_MODEL") || env("LLM_MODEL") || "claude-sonnet-4-5";
   },
+  get groq() {
+    return env("GROQ_MODEL") || "llama-3.3-70b-versatile";
+  },
 };
 
 export function providerConfigured(p: ProviderId): boolean {
   if (p === "gemini") return Boolean(env("GEMINI_API_KEY") || env("GOOGLE_API_KEY"));
   if (p === "openai") return Boolean(env("OPENAI_API_KEY"));
-  return Boolean(env("ANTHROPIC_API_KEY") || env("ANTHROPIC_AUTH_TOKEN"));
+  if (p === "anthropic") return Boolean(env("ANTHROPIC_API_KEY") || env("ANTHROPIC_AUTH_TOKEN"));
+  return Boolean(env("GROQ_API_KEY"));
 }
 
 /** Der tatsächlich verwendete Anbieter. Es gibt keinen stillen Anbieterwechsel. */
 export function activeProvider(): ProviderId | null {
-  const wanted = (env("AI_PROVIDER").toLowerCase() as ProviderId) || "openai";
-  if (["gemini", "openai", "anthropic"].includes(wanted) && providerConfigured(wanted)) return wanted;
+  const wanted = (env("AI_PROVIDER") || "openai").toLowerCase() as ProviderId;
+  const ordered: ProviderId[] = [wanted, "gemini", "openai", "anthropic", "groq"];
+  for (const candidate of ordered) {
+    if (candidate && providerConfigured(candidate)) return candidate;
+  }
   return null;
 }
 
@@ -49,7 +58,10 @@ export function llmConfigured(): boolean {
 }
 
 export function modelFor(p: ProviderId): string {
-  return p === "gemini" ? MODELS.gemini : p === "openai" ? MODELS.openai : MODELS.anthropic;
+  if (p === "gemini") return MODELS.gemini;
+  if (p === "openai") return MODELS.openai;
+  if (p === "anthropic") return MODELS.anthropic;
+  return MODELS.groq;
 }
 
 /** Aktuelles Modell des aktiven Anbieters (für Anzeigen im UI). */
@@ -96,6 +108,14 @@ export function providerStatus(): ProviderStatus {
         variable: "ANTHROPIC_API_KEY",
         konsole: "https://console.anthropic.com/settings/keys",
       },
+      {
+        id: "groq",
+        name: "Groq",
+        konfiguriert: providerConfigured("groq"),
+        modell: MODELS.groq,
+        variable: "GROQ_API_KEY",
+        konsole: "https://console.groq.com/keys",
+      },
     ],
   };
 }
@@ -105,6 +125,7 @@ export function providerStatus(): ProviderStatus {
 let geminiClient: GoogleGenAI | null = null;
 let openaiClient: OpenAI | null = null;
 let anthropicClient: Anthropic | null = null;
+let groqClient: OpenAI | null = null;
 
 function gemini(): GoogleGenAI {
   if (!geminiClient) geminiClient = new GoogleGenAI({ apiKey: env("GEMINI_API_KEY") || env("GOOGLE_API_KEY") });
@@ -129,6 +150,17 @@ function anthropic(): Anthropic {
     });
   }
   return anthropicClient;
+}
+export function groqClientOrNull(): OpenAI | null {
+  if (!env("GROQ_API_KEY")) return null;
+  if (!groqClient) {
+    groqClient = new OpenAI({
+      apiKey: env("GROQ_API_KEY"),
+      baseURL: env("GROQ_BASE_URL") || "https://api.groq.com/openai/v1",
+      maxRetries: 1,
+    });
+  }
+  return groqClient;
 }
 
 function noProvider(): never {
@@ -216,6 +248,11 @@ export async function complete(system: string, messages: ChatMsg[], maxTokens = 
   return visionComplete(system, messages, [], maxTokens);
 }
 
+function resolveSystemInstruction(system: string, provider: ProviderId): string {
+  const text = [system, provider === "groq" ? GROQ_SYSTEM_INSTRUCTION : ""].filter(Boolean).join("\n\n");
+  return text || GROQ_SYSTEM_INSTRUCTION;
+}
+
 /** Wie `complete`, zusätzlich mit Bildern (Scan-zu-Quiz). */
 export async function visionComplete(
   system: string,
@@ -225,12 +262,13 @@ export async function visionComplete(
 ): Promise<string> {
   const provider = activeProvider();
   if (!provider) noProvider();
+  const effectiveSystem = resolveSystemInstruction(system, provider);
 
   if (provider === "gemini") {
     const res = await gemini().models.generateContent({
       model: MODELS.gemini,
       contents: toGeminiContents(messages, images),
-      config: { systemInstruction: system, maxOutputTokens: maxTokens },
+      config: { systemInstruction: effectiveSystem, maxOutputTokens: maxTokens },
     });
     return (res.text || "").trim();
   }
@@ -239,7 +277,17 @@ export async function visionComplete(
     const client = openaiClientOrNull()!;
     const res = await client.chat.completions.create({
       model: MODELS.openai,
-      messages: toOpenAiMessages(system, messages, images),
+      messages: toOpenAiMessages(effectiveSystem, messages, images),
+      max_completion_tokens: maxTokens,
+    } as any);
+    return (res.choices?.[0]?.message?.content || "").trim();
+  }
+
+  if (provider === "groq") {
+    const client = groqClientOrNull()!;
+    const res = await client.chat.completions.create({
+      model: MODELS.groq,
+      messages: toOpenAiMessages(effectiveSystem, messages, images),
       max_completion_tokens: maxTokens,
     } as any);
     return (res.choices?.[0]?.message?.content || "").trim();
@@ -266,11 +314,13 @@ export async function* stream(system: string, messages: ChatMsg[], maxTokens = 1
   const provider = activeProvider();
   if (!provider) noProvider();
 
+  const effectiveSystem = resolveSystemInstruction(system, provider);
+
   if (provider === "gemini") {
     const s = await gemini().models.generateContentStream({
       model: MODELS.gemini,
       contents: toGeminiContents(messages),
-      config: { systemInstruction: system, maxOutputTokens: maxTokens },
+      config: { systemInstruction: effectiveSystem, maxOutputTokens: maxTokens },
     });
     for await (const chunk of s) {
       const text = chunk.text;
@@ -283,7 +333,22 @@ export async function* stream(system: string, messages: ChatMsg[], maxTokens = 1
     const client = openaiClientOrNull()!;
     const s = await client.chat.completions.create({
       model: MODELS.openai,
-      messages: toOpenAiMessages(system, messages),
+      messages: toOpenAiMessages(effectiveSystem, messages),
+      max_completion_tokens: maxTokens,
+      stream: true,
+    } as any);
+    for await (const chunk of s as any) {
+      const delta = chunk?.choices?.[0]?.delta?.content;
+      if (delta) yield delta as string;
+    }
+    return;
+  }
+
+  if (provider === "groq") {
+    const client = groqClientOrNull()!;
+    const s = await client.chat.completions.create({
+      model: MODELS.groq,
+      messages: toOpenAiMessages(effectiveSystem, messages),
       max_completion_tokens: maxTokens,
       stream: true,
     } as any);
@@ -298,7 +363,7 @@ export async function* stream(system: string, messages: ChatMsg[], maxTokens = 1
     anthropic().messages.create({
       model,
       max_tokens: maxTokens,
-      system,
+      system: resolveSystemInstruction(system, provider),
       messages: toAnthropicMessages(messages),
       stream: true,
     }),

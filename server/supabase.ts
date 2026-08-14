@@ -29,6 +29,12 @@ function getClient(): SupabaseClient | null {
   return client;
 }
 
+function getServiceClient(): SupabaseClient | null {
+  if (!supabaseEnabled() || !env("SUPABASE_SERVICE_KEY")) return null;
+  // Use a client initialized explicitly with the service_role key for write operations
+  return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_KEY"), { auth: { persistSession: false } });
+}
+
 const TABELLEN = ["memory_vectors", "events", "relationships", "financial_summary"];
 
 /** Prüft beim Start, ob die vier Tabellen existieren, und meldet sonst klar. */
@@ -61,8 +67,11 @@ export async function pullTable(table: string, userId: number) {
 }
 
 async function safeUpsert(table: string, row: Record<string, unknown>) {
-  const c = getClient();
-  if (!c) return { skipped: true as const };
+  // For writes we prefer the service_role key (bypasses RLS). If not available,
+  // return a helpful message so the operator can either supply SUPABASE_SERVICE_KEY
+  // or add appropriate RLS policies in the Supabase dashboard.
+  const c = getServiceClient();
+  if (!c) return { skipped: true as const, error: "SUPABASE_SERVICE_KEY fehlt. Schreib-Operation übersprungen. Entweder SUPABASE_SERVICE_KEY setzen oder RLS-Policy anpassen." };
   try {
     const { error } = await c.from(table).upsert(row);
     if (error) return { skipped: false as const, error: error.message };

@@ -4,17 +4,17 @@ import {
   Brain, CalendarCheck, Flame, LayoutDashboard, ListChecks, LogOut, Menu, MessageSquare,
   PanelLeftClose, PanelLeftOpen, Repeat, Search, Settings, Sparkles, User as UserIcon, Wallet,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
 import {
   CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
-} from "@/components/ui/command";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { SparkLogo, SparkMark } from "@/components/Logo";
-import { SparkAvatar } from "@/components/Avatar";
-import { ChaosModal } from "@/components/ChaosModal";
-import { useApp } from "@/state";
+} from "./ui/command";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "./ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { SparkLogo, SparkMark } from "./Logo";
+import { SparkAvatar } from "./Avatar";
+import { ChaosModal } from "./ChaosModal";
+import { useApp } from "../state";
 
 export const NAV = [
   { href: "/", label: "Heute", icon: LayoutDashboard },

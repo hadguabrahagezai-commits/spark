@@ -4,21 +4,22 @@ import {
   ArrowLeft, ArrowRight, Brain, Check, Eye, EyeOff, Loader2, Mic, Palette, Sparkles, Square,
   Upload, Volume2, Wallet, Info, CalendarDays, Building2,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { SparkLogo, SparkMark } from "@/components/Logo";
-import { AVATAR_PRESETS, SparkAvatar, deriveFromPhoto, useSpeech } from "@/components/Avatar";
-import type { AvatarConfig } from "@/components/Avatar";
-import { rawApi, useApp } from "@/state";
-import { StimmeAuswahl } from "@/components/StimmeAuswahl";
-import { LiveAvatarAuswahl } from "@/components/LiveAvatarAuswahl";
-import { BankVerbinden } from "@/components/BankVerbinden";
-import { useToast } from "@/hooks/use-toast";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Slider } from "../components/ui/slider";
+import { Badge } from "../components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
+import { SparkLogo, SparkMark } from "../components/Logo";
+import { AVATAR_PRESETS, deriveFromPhoto, useSpeech } from "../components/Avatar";
+import JarvisSphere from "../components/JarvisSphere";
+import type { AvatarConfig } from "../components/Avatar";
+import { rawApi, useApp } from "../state";
+import { StimmeAuswahl } from "../components/StimmeAuswahl";
+import { LiveAvatarAuswahl } from "../components/LiveAvatarAuswahl";
+import { BankVerbinden } from "../components/BankVerbinden";
+import { useToast } from "../hooks/use-toast";
 
 const GOALS = [
   { id: "alltag", title: "Alltag ordnen", desc: "Aufgaben, Termine, Kopf frei.", icon: Sparkles },
@@ -93,7 +94,7 @@ export default function Onboarding() {
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [config, setConfig] = useState<AvatarConfig>({ preset: "abstrakt-funke", ...AVATAR_PRESETS[6].config });
+  const [config, setConfig] = useState<AvatarConfig>({ preset: "abstrakt-funke", ...(AVATAR_PRESETS[6]?.config ?? {}) });
   const [personality, setPersonality] = useState("mentor");
   const [directness, setDirectness] = useState(50);
   const [verbosity, setVerbosity] = useState(50);
@@ -251,8 +252,8 @@ export default function Onboarding() {
         const res = await rawApi<any>("POST", "/api/voice/clone", { name: companionName, audioBase64: base64, profile: `zerocross:${suggested}` }, token);
         setConsentDone(true);
         toast({
-          title: res.mode === "elevenlabs" ? "Stimmprofil erstellt" : "Stimmprofil lokal gespeichert",
-          description: res.reason || "Deine Einwilligung wurde protokolliert.",
+          title: res?.ok ? "Stimmprofil erstellt" : "Stimmprofil lokal gespeichert",
+          description: res.reason || res.nachricht || "Deine Einwilligung wurde protokolliert.",
         });
       };
       rec.start();
@@ -391,6 +392,12 @@ export default function Onboarding() {
                   </div>
                   {googleConnected ? <Badge>Verbunden</Badge> : <Button size="sm" disabled={!googleReady} onClick={connectGoogle} data-testid="button-onboarding-connect-google">Mit Google verbinden</Button>}
                 </div>
+                <div className="mt-3 rounded-md border border-primary/20 bg-primary/5 p-3 text-left">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-primary">Datenschutz & Vertrauen</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    SPARK fragt nur für Gmail, Kalender, Drive und YouTube nach Zustimmung. Keine automatische Freigabe, keine Werbung, keine Weitergabe an Dritte — nur die von dir ausdrücklich gewählten Funktionen.
+                  </p>
+                </div>
                 {!googleReady && <p className="mt-3 text-xs text-destructive">Google OAuth ist auf diesem Server noch nicht konfiguriert.</p>}
               </section>
               <section className="rounded-lg border border-card-border bg-card p-4">
@@ -464,7 +471,7 @@ export default function Onboarding() {
             <p className="mt-1 text-sm text-muted-foreground">Gesicht, Charakter und Stimme — alles änderbar.</p>
             <div className="mt-6 grid gap-6 lg:grid-cols-[280px_1fr]">
               <div className="rounded-lg border border-card-border bg-card p-4 text-center lg:sticky lg:top-4 lg:self-start">
-                <SparkAvatar config={config} size={190} mood="freudig" speaking={speech.speaking} amplitude={speech.amplitude} className="mx-auto" />
+                <div className="mx-auto"><JarvisSphere size={190} speaking={speech.speaking} /></div>
                 <Input value={companionName} onChange={(e) => setCompanionName(e.target.value)} className="mt-3 text-center" data-testid="input-companion-name" />
                 <p className="mt-3 rounded-md bg-muted/60 p-2 text-left text-xs italic text-muted-foreground" data-testid="text-preview-line">
                   „{previewLine()}"
@@ -478,26 +485,12 @@ export default function Onboarding() {
               <Tabs defaultValue="gesicht">
                 <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
                   <TabsTrigger value="gesicht" data-testid="tab-gesicht">Gesicht</TabsTrigger>
-                  <TabsTrigger value="liveavatar" data-testid="tab-liveavatar">Live-Avatar</TabsTrigger>
                   <TabsTrigger value="charakter" data-testid="tab-charakter">Charakter</TabsTrigger>
                   <TabsTrigger value="stimme" data-testid="tab-stimme">Stimme</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="liveavatar" className="mt-4 space-y-4">
-                  <LiveAvatarAuswahl />
-                </TabsContent>
-
                 <TabsContent value="gesicht" className="mt-4 space-y-4">
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                    {AVATAR_PRESETS.map((p) => (
-                      <button key={p.id} onClick={() => setConfig({ preset: p.id, ...p.config })}
-                        className={`rounded-md border p-1.5 hover-elevate ${config.preset === p.id ? "border-primary bg-primary/10" : "border-card-border bg-card"}`}
-                        data-testid={`button-preset-${p.id}`} title={p.label}>
-                        <SparkAvatar config={{ preset: p.id, ...p.config }} size={54} animate={false} className="mx-auto" />
-                        <span className="mt-1 block truncate text-[10px] text-muted-foreground">{p.label}</span>
-                      </button>
-                    ))}
-                  </div>
+                  <div className="text-sm text-muted-foreground">Gesichtsauswahl wurde entfernt. Die Companion-Einstellungen findest du später unter Einstellungen → Companion.</div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">

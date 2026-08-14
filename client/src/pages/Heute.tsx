@@ -1,19 +1,20 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
+import JarvisSphere from "../components/JarvisSphere";
 import {
   AlertTriangle, Battery, BatteryFull, BatteryLow, Brain, CalendarDays, ChevronDown, ListChecks, Mail,
   MessageSquare, RefreshCw, Repeat, Sparkles, Wallet,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Page, PageHeader } from "@/components/Layout";
-import { SparkAvatar } from "@/components/Avatar";
-import { Markdown } from "@/components/Markdown";
-import { useApp } from "@/state";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { Checkbox } from "../components/ui/checkbox";
+import { Skeleton } from "../components/ui/skeleton";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../components/ui/collapsible";
+import { Page, PageHeader } from "../components/Layout";
+import { SparkAvatar } from "../components/Avatar";
+import { Markdown } from "../components/Markdown";
+import { useApp } from "../state";
 
 type Today = {
   stats: { totalXp: number; streak: number; minutes: number };
@@ -142,7 +143,7 @@ export default function Heute() {
       {/* Copilot-Zeile */}
       <section className="spark-hero rounded-2xl p-5 md:p-6" data-testid="card-copilot">
         <div className="flex gap-3">
-          {avatar && <SparkAvatar config={avatar} size={56} mood="freudig" className="shrink-0" />}
+          {avatar && <JarvisSphere size={56} className="shrink-0" />}
           <div className="min-w-0 flex-1">
             <p className="text-xs text-muted-foreground">{companion?.name || "Spark"} schlägt vor</p>
             {sugLoading && <Skeleton className="mt-2 h-10 w-full" />}

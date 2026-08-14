@@ -9,7 +9,7 @@
    ========================================================================= */
 
 :root {
-  --font-sans: 'Satoshi', 'General Sans', 'Inter', system-ui, sans-serif;
+  --font-sans: 'Inter', 'Satoshi', 'General Sans', system-ui, sans-serif;
   --font-display: 'Clash Display', 'General Sans', 'Satoshi', system-ui, sans-serif;
   --font-serif: 'Lora', Georgia, serif;
   --font-mono: 'JetBrains Mono', 'Geist Mono', Menlo, monospace;
@@ -25,6 +25,7 @@
   --shadow-lg: 0 12px 28px -6px hsl(0 0% 0% / 0.24), 0 4px 8px -4px hsl(0 0% 0% / 0.14);
   --shadow-xl: 0 24px 48px -12px hsl(0 0% 0% / 0.3);
   --shadow-2xl: 0 32px 64px -16px hsl(0 0% 0% / 0.38);
+  --shadow-glow: 0 0 0 1px hsl(var(--primary) / 0.25), 0 18px 48px hsl(var(--primary) / 0.2);
 
   --button-outline: rgba(255, 255, 255, 0.1);
   --badge-outline: rgba(255, 255, 255, 0.06);
@@ -33,10 +34,10 @@
   --elevate-2: rgba(255, 255, 255, 0.1);
 
   /* Theme 1 — Nachtlabor (Standard) */
-  --background: 220 30% 6%;
+  --background: 220 8% 6%;
   --foreground: 210 30% 96%;
-  --border: 220 20% 18%;
-  --card: 220 26% 9%;
+  --border: 220 16% 18%;
+  --card: 220 10% 8%;
   --card-foreground: 210 30% 96%;
   --card-border: 220 20% 16%;
   --sidebar: 220 28% 8%;
@@ -274,20 +275,48 @@ html[data-theme='aurora'][data-contrast='hoch'] {
 }
 
 body {
-  background-image: var(--scanlines);
+  background-image:
+    radial-gradient(circle at top left, hsl(var(--primary) / 0.11), transparent 34%),
+    radial-gradient(circle at bottom right, hsl(var(--accent) / 0.1), transparent 32%),
+    var(--scanlines);
   background-attachment: fixed;
   background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  letter-spacing: -0.02em;
+}
+
+#root {
+  min-height: 100vh;
+  background: transparent;
 }
 
 .spark-app-shell {
+  position: relative;
   background:
-    radial-gradient(900px 550px at 82% -12%, hsl(var(--primary) / .11), transparent 63%),
-    radial-gradient(650px 480px at -8% 92%, hsl(var(--accent) / .09), transparent 65%),
+    radial-gradient(900px 550px at 82% -12%, hsl(var(--primary) / .13), transparent 63%),
+    radial-gradient(650px 480px at -8% 92%, hsl(var(--accent) / .12), transparent 65%),
     hsl(var(--background));
+  isolation: isolate;
 }
 
-.spark-sidebar { box-shadow: 18px 0 48px hsl(220 30% 2% / .12); }
-.spark-topbar { box-shadow: 0 1px 0 hsl(var(--border) / .72); }
+.spark-app-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, hsl(var(--background) / 0.4), transparent 18%, transparent 82%, hsl(var(--background) / 0.45));
+  pointer-events: none;
+}
+
+.spark-sidebar {
+  box-shadow: 18px 0 48px hsl(220 30% 2% / .12), inset -1px 0 0 hsl(var(--border) / 0.7);
+  background: linear-gradient(180deg, hsl(var(--sidebar) / 0.98), hsl(var(--sidebar) / 0.88));
+}
+
+.spark-topbar {
+  box-shadow: 0 1px 0 hsl(var(--border) / .72), 0 18px 40px hsl(var(--background) / .18);
+  background: linear-gradient(180deg, hsl(var(--background) / 0.78), hsl(var(--background) / 0.58));
+}
+
 .spark-page-header { animation: spark-enter .38s ease-out both; }
 .spark-page > * { animation: spark-enter .4s ease-out both; }
 .spark-page > *:nth-child(2) { animation-delay: 45ms; }
@@ -295,8 +324,13 @@ body {
 
 .spark-panel {
   border: 1px solid hsl(var(--card-border) / .9);
-  background: linear-gradient(145deg, hsl(var(--card) / .96), hsl(var(--card) / .72));
-  box-shadow: 0 16px 40px hsl(220 30% 2% / .12), inset 0 1px 0 hsl(0 0% 100% / .035);
+  background: linear-gradient(145deg, hsl(var(--card) / .96), hsl(var(--card) / .74));
+  box-shadow: 0 18px 42px hsl(220 30% 2% / .14), inset 0 1px 0 hsl(0 0% 100% / .035), 0 0 0 1px hsl(var(--primary) / 0.06);
+  backdrop-filter: blur(18px);
+}
+
+.spark-panel:hover {
+  box-shadow: 0 24px 56px hsl(220 30% 2% / .17), 0 0 0 1px hsl(var(--primary) / 0.08);
 }
 
 .spark-hero {
@@ -386,9 +420,28 @@ html[data-motion='reduziert'] *::after {
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.04em;
+    color: hsl(var(--foreground));
   }
 
   ::selection { background: hsl(var(--primary) / .28); color: hsl(var(--foreground)); }
+}
+
+@layer components {
+  .spark-glow-ring {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .spark-cta {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+    color: hsl(var(--primary-foreground));
+    box-shadow: 0 12px 32px hsl(var(--primary) / 0.22);
+  }
 }
 
 /**

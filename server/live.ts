@@ -3,17 +3,9 @@ import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { google as googleapis } from "googleapis";
 import { storage } from "./storage";
-import { llmConfigured, providerStatus, currentModel, testProvider } from "./llm";
-import {
-  listVoices,
-  synthesizeStream,
-  cloneVoice,
-  transcribe,
-  elevenConfigured,
-  openaiVoiceConfigured,
-  testEleven,
-} from "./voice";
-import { avatarStatus, listAvatars, createSessionToken, streaming, heygenConfigured, testAvatar } from "./avatar";
+import { llmConfigured, providerStatus, currentModel, testProvider, completeJson } from "./llm";
+import { listVoices, synthesizeStream, cloneVoice, transcribe, openaiVoiceConfigured } from "./voice";
+import { avatarStatus, listAvatars, createSessionToken, streaming, testAvatar } from "./avatar";
 import {
   bankingStatus,
   plaidConfigured,
@@ -94,28 +86,22 @@ export function registerLiveRoutes(app: Express, auth: RequestHandler) {
           anbieter: ki.anbieter,
         },
         {
-          id: "elevenlabs",
-          name: "ElevenLabs (Stimme)",
-          status: elevenConfigured() ? "verbunden" : openaiVoiceConfigured() ? "teilweise" : "nicht_konfiguriert",
-          detail: elevenConfigured()
-            ? `Modell ${process.env.ELEVENLABS_MODEL || "eleven_multilingual_v2"}`
-            : openaiVoiceConfigured()
-              ? `Ersatz: OpenAI-TTS (${process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts"})`
-              : "Browser-Sprachausgabe",
-          hinweis: elevenConfigured()
-            ? "Echte Stimmen, Streaming-TTS und Stimmklonen sind aktiv."
-            : "Ohne ELEVENLABS_API_KEY gibt es kein Stimmklonen; SPARK spricht über OpenAI oder den Browser.",
-          variablen: ["ELEVENLABS_API_KEY", "ELEVENLABS_DEFAULT_VOICE_ID"],
-          konsole: "https://elevenlabs.io/app/settings/api-keys",
+          id: "stimme",
+          name: "Stimme (TTS)",
+          status: openaiVoiceConfigured() ? "verbunden" : "nicht_konfiguriert",
+          detail: openaiVoiceConfigured() ? `Server-TTS (${process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts"})` : "Browser-Sprachausgabe",
+          hinweis: openaiVoiceConfigured() ? "Serverseitige TTS konfiguriert." : "Keine Server-TTS konfiguriert; Browser-TTS wird empfohlen.",
+          variablen: ["OPENAI_API_KEY", "OPENAI_TTS_MODEL", "OPENAI_TTS_VOICE"],
+          konsole: "https://platform.openai.com/account/api-keys",
         },
         {
-          id: "heygen",
-          name: "HeyGen (Live-Avatar)",
-          status: heygenConfigured() ? (avatar.avatarId ? "verbunden" : "teilweise") : "nicht_konfiguriert",
-          detail: avatar.modus,
+          id: "avatare",
+          name: "Avatare",
+          status: "verbunden",
+          detail: avatar.hinweis,
           hinweis: avatar.hinweis,
-          variablen: ["HEYGEN_API_KEY", "HEYGEN_AVATAR_ID", "HEYGEN_VOICE_ID"],
-          konsole: "https://app.heygen.com/settings?nav=API",
+          variablen: [],
+          konsole: "",
         },
         {
           id: "google",
@@ -138,13 +124,13 @@ export function registerLiveRoutes(app: Express, auth: RequestHandler) {
           konsole: "https://console.cloud.google.com/google/maps-apis/credentials",
         },
         {
-          id: "plaid",
-          name: "Plaid (Bank)",
+          id: "bank",
+          name: "Bank (Salt Edge)",
           status: plaidConfigured() ? (bank.verbundeneBanken ? "verbunden" : "teilweise") : "nicht_konfiguriert",
           detail: plaidConfigured() ? `Umgebung ${bank.umgebung} · ${bank.verbundeneBanken} Bank(en)` : "Bank nicht verbunden",
           hinweis: bank.message,
-          variablen: ["PLAID_CLIENT_ID", "PLAID_SECRET", "PLAID_ENV"],
-          konsole: "https://dashboard.plaid.com/developers/keys",
+          variablen: ["SALT_EDGE_APP_ID", "SALT_EDGE_SECRET", "SALT_EDGE_API_BASE"],
+          konsole: "https://www.saltedge.com/",
         },
         {
           id: "supabase",
@@ -170,10 +156,10 @@ export function registerLiveRoutes(app: Express, auth: RequestHandler) {
     const id = String(req.params.id);
     try {
       if (id === "ki") return res.json(await testProvider());
-      if (id === "elevenlabs") return res.json(await testEleven());
-      if (id === "heygen") return res.json(await testAvatar());
+      if (id === "stimme") return res.json({ ok: false, nachricht: "Serverseitige externe TTS deaktiviert; Browser-TTS wird empfohlen." });
+      if (id === "avatare") return res.json(await testAvatar());
       if (id === "google") return res.json(await testGoogle(req.user!.id));
-      if (id === "plaid") return res.json(await testPlaid());
+      if (id === "plaid" || id === "bank" || id === "saltedge") return res.json(await testPlaid());
       if (id === "maps") {
         if (!mapsConfigured()) return res.json({ ok: false, nachricht: "GOOGLE_MAPS_API_KEY nicht gesetzt." });
         const r = await geocode("Brandenburger Tor, Berlin");
@@ -189,6 +175,44 @@ export function registerLiveRoutes(app: Express, auth: RequestHandler) {
     }
   });
 
+  /* =================================================== Action Gateway */
+
+  app.post("/api/action/parse", auth, async (req: AuthedRequest, res: Response) => {
+    const text = String(req.body?.text || "").trim();
+    if (!text) return res.status(400).json({ ok: false, message: "Kein Text übergeben." });
+    // quick heuristics
+    const urlMatch = text.match(/https?:\/\/\S+/i);
+    if (urlMatch) return res.json({ ok: true, kind: "url", url: urlMatch[0] });
+    if (/\b(youtube|yt)\b/i.test(text) || /öffne\s+youtube/i.test(text.toLowerCase())) return res.json({ ok: true, kind: "url", url: "https://www.youtube.com" });
+    if (/\b(suche|search|finde)\b/i.test(text)) {
+      const q = text.replace(/.*?(?:suche|search|finde)\s+(auf\s+google\s+nach\s+)?/i, "").trim();
+      const query = encodeURIComponent(q || text);
+      return res.json({ ok: true, kind: "search", url: `https://www.google.com/search?q=${query}` });
+    }
+    // Best-effort: ask the LLM to extract intent as JSON
+    try {
+      const system = `Du bist ein Parser, der aus einer Nutzer- oder KI-Anweisung exakt ein JSON zurückgibt.\nAntwortformat: { "action": "open" | "search" | "none", "url": string }\nWenn keine Aktion erkennbar ist, gib {"action":"none"}.`;
+      const parsed = await completeJson<{ action: string; url?: string }>(system, text, { action: "none" }, 300);
+      if (parsed.action === "open" && parsed.url) return res.json({ ok: true, kind: "url", url: parsed.url });
+      if (parsed.action === "search" && parsed.url) return res.json({ ok: true, kind: "search", url: parsed.url });
+      return res.json({ ok: true, kind: "none" });
+    } catch (e: any) {
+      return res.json({ ok: false, message: String(e?.message || e).slice(0, 200) });
+    }
+  });
+
+  app.post("/api/action/interpret", auth, async (req: AuthedRequest, res: Response) => {
+    const text = String(req.body?.text || "").trim();
+    if (!text) return res.status(400).json({ ok: false, message: "Kein Text übergeben." });
+    try {
+      const system = `Du bist ein Parser, der aus einer Nutzer- oder KI-Anweisung exakt ein JSON zurückgibt.\nAntwortformat: { "action": "open" | "search" | "none", "url": string }\nBeispiele:\n- "Öffne YouTube" → {"action":"open","url":"https://www.youtube.com"}\n- "Suche auf Google nach Katzenvideos" → {"action":"search","url":"https://www.google.com/search?q=Katzenvideos"}\nWenn keine Aktion erkennbar ist, gib {"action":"none"}.`;
+      const parsed = await completeJson<{ action: string; url?: string }>(system, text, { action: "none" }, 800);
+      return res.json({ ok: true, result: parsed });
+    } catch (e: any) {
+      return res.status(500).json({ ok: false, message: String(e?.message || e).slice(0, 200) });
+    }
+  });
+
   /* ============================================================== Stimme */
 
   app.get("/api/voice/voices", auth, async (_req, res) => res.json(await listVoices()));
@@ -196,51 +220,24 @@ export function registerLiveRoutes(app: Express, auth: RequestHandler) {
   app.post("/api/voice/tts", auth, async (req: AuthedRequest, res) => {
     const text = String(req.body?.text || "").slice(0, 2500);
     if (!text) return res.status(400).json({ message: "Kein Text übergeben." });
-    const companion = storage.getCompanion(req.user!.id);
-    // HeyGen-Voice-IDs gelten ausschließlich für den Live-Avatar und werden nie an ElevenLabs/OpenAI gesendet.
-    const requestedVoice = String(req.body?.voiceId || "");
-    const provider = req.body?.voiceProvider === "openai" || req.body?.voiceProvider === "elevenlabs"
-      ? req.body.voiceProvider
-      : companion.voiceProvider === "openai" || companion.voiceProvider === "elevenlabs" ? companion.voiceProvider : undefined;
-    const voiceId = requestedVoice || (provider ? companion.voiceId : undefined);
-    const result = await synthesizeStream(text, voiceId || undefined, {
-      stability: zahl(req.body?.stability) ?? companion.voiceStability,
-      similarity: zahl(req.body?.similarity) ?? companion.voiceSimilarity,
-      style: zahl(req.body?.style) ?? companion.voiceStyle,
-    }, provider);
-    if (result.mode === "fehler") return res.status(result.status || 502).json({ mode: "fehler", message: result.reason });
-    res.setHeader("Content-Type", result.mimeType);
-    res.setHeader("X-Spark-Voice-Source", result.mode);
-    res.setHeader("Cache-Control", "no-store");
-    result.body.pipe(res);
-    result.body.on("error", () => res.end());
+    const result = await synthesizeStream(text);
+    if (result.mode === "browser") return res.json({ mode: "browser", text: result.text, message: "Browser-Sprachausgabe wird im Client gestartet." });
+    if (result.mode === "openai") return res.json({ mode: "openai", url: result.url || null });
+    return res.status(502).json({ mode: "fehler", message: result.reason || "TTS-Fehler" });
   });
 
   app.post("/api/voice/clone", auth, async (req: AuthedRequest, res) => {
     if (!req.body?.consent) return res.status(400).json({ message: "Ohne ausdrückliche Einwilligung wird keine Stimme geklont." });
-    const result = await cloneVoice(
-      String(req.body?.name || "SPARK-Stimme"),
-      req.body?.audioBase64,
-      String(req.body?.mimeType || "audio/webm"),
-    );
-    if (result.mode === "elevenlabs") {
-      storage.updateCompanion(req.user!.id, {
-        voiceProfile: result.voiceId,
-        voiceId: result.voiceId,
-        voiceProvider: "elevenlabs",
-        voiceConsent: 1,
-      });
-      return res.json(result);
-    }
-    if (result.mode === "fehler") return res.status(result.status).json(result);
-    res.status(503).json(result);
+    const result = await cloneVoice();
+    if (!result.ok) return res.status(503).json({ message: result.nachricht });
+    res.json(result);
   });
 
   app.post("/api/voice/stt", auth, async (req, res) => {
     const audio = String(req.body?.audioBase64 || "");
     if (!audio) return res.status(400).json({ message: "Keine Aufnahme übermittelt." });
     const result = await transcribe(audio, String(req.body?.mimeType || "audio/webm"));
-    if (!result.ok) return res.status(result.status).json({ message: result.nachricht, browserFallback: result.browserFallback });
+    if (!result.ok) return res.status(result.status || 502).json({ message: result.nachricht });
     res.json(result);
   });
 
@@ -255,32 +252,25 @@ export function registerLiveRoutes(app: Express, auth: RequestHandler) {
 
   app.post("/api/avatar/token", auth, async (req: AuthedRequest, res) => {
     const companion = storage.getCompanion(req.user!.id);
-    const result = await createSessionToken({
-      avatarId: req.body?.avatarId || companion.liveAvatarId || undefined,
-      voiceId: req.body?.voiceId || (companion.voiceProvider === "heygen" ? companion.voiceId : undefined),
-      stability: companion.voiceStability,
-      similarity: companion.voiceSimilarity,
-      style: companion.voiceStyle,
-      quality: req.body?.quality,
-    });
-    if (!result.ok) return res.status(result.status).json({ message: result.nachricht });
+    const result = await createSessionToken();
+    if (!result.ok) return res.status(result.status || 503).json({ message: result.nachricht });
     res.json(result);
   });
 
   app.post("/api/avatar/session/new", auth, async (req, res) => {
-    const r = await streaming.neu(req.body || {});
+    const r = await streaming.neu();
     res.status(r.ok ? 200 : r.status).json(r.data);
   });
   app.post("/api/avatar/session/start", auth, async (req, res) => {
-    const r = await streaming.start(req.body || {});
+    const r = await streaming.start();
     res.status(r.ok ? 200 : r.status).json(r.data);
   });
   app.post("/api/avatar/task", auth, async (req, res) => {
-    const r = await streaming.task(req.body || {});
+    const r = await streaming.task();
     res.status(r.ok ? 200 : r.status).json(r.data);
   });
   app.post("/api/avatar/session/stop", auth, async (req, res) => {
-    const r = await streaming.stop(req.body || {});
+    const r = await streaming.stop();
     res.status(r.ok ? 200 : r.status).json(r.data);
   });
 

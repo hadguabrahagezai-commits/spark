@@ -13,25 +13,17 @@ export type AvatarConfig = {
   hairstyle: string; // kurz | lang | bob | zopf | locken | kahl
   eyes: string; // rund | mandel | schmal
   outfit: string;
+  image?: string;
 };
 
 export type Mood = "freudig" | "neutral" | "nachdenklich" | "besorgt";
 
 export const AVATAR_PRESETS: { id: string; label: string; config: Omit<AvatarConfig, "preset"> }[] = [
-  { id: "anime-junge", label: "Anime Junge", config: { style: "anime", skin: "#F3C9A4", hair: "#2F3350", hairstyle: "kurz", eyes: "rund", outfit: "#3B82F6" } },
-  { id: "anime-maedchen", label: "Anime Mädchen", config: { style: "anime", skin: "#F8D6BC", hair: "#8B3A62", hairstyle: "lang", eyes: "rund", outfit: "#EC4899" } },
-  { id: "anime-androgyn", label: "Anime Androgyn", config: { style: "anime", skin: "#E8B996", hair: "#22D3EE", hairstyle: "bob", eyes: "mandel", outfit: "#8B5CF6" } },
-  { id: "real-mann", label: "Realistisch Mann", config: { style: "realistisch", skin: "#C68642", hair: "#221A15", hairstyle: "kurz", eyes: "schmal", outfit: "#334155" } },
-  { id: "real-frau", label: "Realistisch Frau", config: { style: "realistisch", skin: "#E0AC69", hair: "#3B2314", hairstyle: "zopf", eyes: "mandel", outfit: "#0F766E" } },
-  { id: "real-nonbinaer", label: "Realistisch Nonbinär", config: { style: "realistisch", skin: "#8D5524", hair: "#141414", hairstyle: "locken", eyes: "rund", outfit: "#B45309" } },
-  { id: "abstrakt-funke", label: "Abstrakt Funke", config: { style: "abstrakt", skin: "#22D3EE", hair: "#A78BFA", hairstyle: "kahl", eyes: "rund", outfit: "#1E293B" } },
-  { id: "abstrakt-prisma", label: "Abstrakt Prisma", config: { style: "abstrakt", skin: "#F472B6", hair: "#FDE68A", hairstyle: "kahl", eyes: "mandel", outfit: "#312E81" } },
-  { id: "abstrakt-orbit", label: "Abstrakt Orbit", config: { style: "abstrakt", skin: "#34D399", hair: "#0EA5E9", hairstyle: "kahl", eyes: "schmal", outfit: "#064E3B" } },
-  { id: "abstrakt-kristall", label: "Abstrakt Kristall", config: { style: "abstrakt", skin: "#93C5FD", hair: "#E0E7FF", hairstyle: "kahl", eyes: "rund", outfit: "#1E3A8A" } },
-  { id: "abstrakt-lava", label: "Abstrakt Lava", config: { style: "abstrakt", skin: "#FB923C", hair: "#EF4444", hairstyle: "kahl", eyes: "mandel", outfit: "#7C2D12" } },
-  { id: "abstrakt-moos", label: "Abstrakt Moos", config: { style: "abstrakt", skin: "#A3E635", hair: "#166534", hairstyle: "kahl", eyes: "schmal", outfit: "#14532D" } },
-  { id: "anime-sanft", label: "Anime Sanft", config: { style: "anime", skin: "#FFE0C7", hair: "#6D28D9", hairstyle: "locken", eyes: "mandel", outfit: "#14B8A6" } },
-  { id: "real-klar", label: "Realistisch Klar", config: { style: "realistisch", skin: "#F1C27D", hair: "#6B7280", hairstyle: "kahl", eyes: "schmal", outfit: "#475569" } },
+  { id: "photoreal-1", label: "Photoreal Portrait (Studio)", config: { style: "image", skin: "#E8DCCF", hair: "#2C2A28", hairstyle: "kurz", eyes: "mandel", outfit: "#111827", image: "/assets/avatars/photoreal-1.svg" } },
+  { id: "photoreal-2", label: "Photoreal Portrait (Warm)", config: { style: "image", skin: "#F1C27D", hair: "#4B2E2A", hairstyle: "lang", eyes: "mandel", outfit: "#0F172A", image: "/assets/avatars/photoreal-2.svg" } },
+  { id: "cyberpunk-1", label: "Cyberpunk (Neon Glas)", config: { style: "image", skin: "#D1E8FF", hair: "#7C3AED", hairstyle: "bob", eyes: "schmal", outfit: "#0F172A", image: "/assets/avatars/cyberpunk-1.svg" } },
+  { id: "glass-1", label: "Glass Portrait (Futuristic)", config: { style: "image", skin: "#E6F1FF", hair: "#1E3A8A", hairstyle: "kurz", eyes: "mandel", outfit: "#0B1220", image: "/assets/avatars/glass-1.svg" } },
+  { id: "studio-bw", label: "Studio B/W", config: { style: "image", skin: "#E6E6E6", hair: "#0B0B0B", hairstyle: "kurz", eyes: "mandel", outfit: "#222222", image: "/assets/avatars/studio-bw.svg" } },
 ];
 
 /* --- Viseme-System: Mundpfad wird numerisch gemorpht ---------------------- */
@@ -158,7 +150,11 @@ export function SparkAvatar({
       </svg>
     );
   }
-
+  // Image-based avatar (premium preset)
+  if ((config as any).image || config.style === "image") {
+    const src = (config as any).image || `/assets/avatars/${config.preset}.svg`;
+    return <img src={src} width={size} height={(size * 220) / 200} className={className} alt="Avatar" data-testid="img-avatar" />;
+  }
   const anime = config.style === "anime";
   return (
     <svg viewBox="0 0 200 220" width={size} height={(size * 220) / 200} className={className} role="img"

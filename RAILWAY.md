@@ -108,7 +108,7 @@ Nach dem Speichern der Variablen deployt Railway automatisch neu.
 Im **Deploy-Log** solltest du diese Zeile sehen:
 
 ```
-[spark] KI-Anbieter: gemini · ElevenLabs an · HeyGen an · Google an · Plaid an · Supabase an
+[spark] KI-Anbieter: gemini · OpenAI an · Google an · Plaid an · Supabase an
 ```
 
 Steht bei einem Dienst „aus", fehlt die passende Variable.
@@ -141,6 +141,5 @@ Railway rechnet nach Verbrauch. SPARK ist ein einzelner kleiner Node-Prozess;
 für den Eigengebrauch liegt das erfahrungsgemäß im Bereich weniger Euro pro Monat.
 Das Volume kostet zusätzlich nach Größe — 1 GB reicht hier weit.
 
-Die eigentlichen Kosten entstehen woanders: ElevenLabs, HeyGen und die
-KI-Anbieter rechnen pro Nutzung ab. Behalte besonders HeyGen im Auge, dort läuft
-die Abrechnung nach Avatar-Minuten.
+Die eigentlichen Kosten entstehen bei den genutzten KI- und Medienanbietern. Behalte besonders
+OpenAI/Anhänge (TTS, STT) und externe Avatar-/Medien-Provider im Auge; diese rechnen pro Nutzung ab.

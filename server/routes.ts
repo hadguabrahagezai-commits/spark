@@ -6,8 +6,7 @@ import { complete, completeJson, stream, llmConfigured, currentModel, providerSt
 import type { ImageInput } from "./llm";
 import { retrieveMemories, extractMemories, addMemory } from "./memory";
 import { supabaseEnabled, supabaseStatus, syncEvent } from "./supabase";
-import { elevenConfigured } from "./voice";
-import { avatarStatus, heygenConfigured } from "./avatar";
+import { avatarStatus } from "./avatar";
 import { bankingStatus, getRecurring, parseCsv, plaidConfigured, syncTransactions } from "./banking";
 import { googleConfigured, mapsConfigured, googleStatus, calendarEvents, gmailSummary } from "./google";
 import { registerLiveRoutes } from "./live";
@@ -130,10 +129,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         scopes: ["gmail.readonly", "gmail.send", "calendar", "drive.readonly", "youtube.readonly", "tasks"],
       },
       supabase: { configured: supabaseEnabled() },
-      elevenlabs: { configured: elevenConfigured() },
+      // legacy external TTS providers removed; use server OpenAI-TTS or browser TTS
       banking: bankingStatus(),
       avatar: avatarStatus(),
-      avatarApi: { configured: heygenConfigured() },
+      avatarApi: { configured: true },
       maps: { configured: mapsConfigured() },
     });
   });

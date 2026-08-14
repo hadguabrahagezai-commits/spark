@@ -5,6 +5,11 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "node:http";
 import { platform } from "node:os";
+import { JarvisEngine } from "../src/core/jarvis_engine";
+import SystemMonitor, { getSystemMetrics } from "../src/modules/system_monitor";
+import BusinessAutomation from "../src/modules/business_automation";
+import VoiceEngine from "../src/modules/voice_engine";
+import * as IntelligenceAgent from "../src/modules/intelligence_agent";
 
 const app = express();
 const httpServer = createServer(app);
@@ -73,15 +78,14 @@ app.use((req, res, next) => {
       `[konfiguration] KI nicht verfügbar: AI_PROVIDER=${ki.gewuenscht}; der passende API-Schlüssel fehlt oder der Anbietername ist ungültig. KI-Routen antworten mit HTTP 503.`,
     );
   }
-  if (!process.env.ELEVENLABS_API_KEY && !process.env.OPENAI_API_KEY) {
-    console.error("[konfiguration] Sprache nicht verfügbar: ELEVENLABS_API_KEY oder OPENAI_API_KEY fehlt. Sprachrouten antworten mit HTTP 503.");
+  if (!process.env.OPENAI_API_KEY) {
+    console.error("[konfiguration] Sprache nicht verfügbar: OPENAI_API_KEY fehlt. Sprachrouten antworten mit HTTP 503.");
   }
-  if (process.env.REQUIRE_LIVE_SERVICES === "true" && (!ki.aktiv || (!process.env.ELEVENLABS_API_KEY && !process.env.OPENAI_API_KEY))) {
+  if (process.env.REQUIRE_LIVE_SERVICES === "true" && !ki.aktiv) {
     throw new Error("Pflichtdienste sind nicht konfiguriert. Prüfe AI_PROVIDER, API-Schlüssel und REQUIRE_LIVE_SERVICES.");
   }
   log(
-    `KI-Anbieter: ${ki.aktiv || "keiner konfiguriert"} · ElevenLabs ${process.env.ELEVENLABS_API_KEY ? "an" : "aus"} · ` +
-      `HeyGen ${process.env.HEYGEN_API_KEY ? "an" : "aus"} · Google ${process.env.GOOGLE_CLIENT_ID ? "an" : "aus"} · ` +
+    `KI-Anbieter: ${ki.aktiv || "keiner konfiguriert"} · Google ${process.env.GOOGLE_CLIENT_ID ? "an" : "aus"} · ` +
       `Plaid ${process.env.PLAID_CLIENT_ID ? "an" : "aus"} · Supabase ${process.env.SUPABASE_URL ? "an" : "aus"}`,
     "spark",
   );
@@ -188,5 +192,40 @@ app.use((req, res, next) => {
       httpServer.close(() => process.exit(0));
       setTimeout(() => process.exit(0), 5000).unref();
     });
+  }
+
+  // Initialize Jarvis integration (non-autonomous by default)
+  try {
+    const jarvis = new JarvisEngine({ dryRun: true });
+    const monitor = new SystemMonitor(5000);
+    const business = new BusinessAutomation({});
+    // start monitor but keep jarvis in dry-run/safe mode
+    monitor.start();
+    await business.init();
+
+    // expose jarvis on app locals for routes to use
+    (app as any).locals.jarvis = { jarvis, monitor, business, VoiceEngine, IntelligenceAgent };
+
+    // simple API for listing and running tasks
+    app.get('/api/jarvis/tasks', (_req, res) => res.json({ ok: true, tasks: jarvis.listTasks() }));
+    app.post('/api/jarvis/run/:id', async (req: any, res: any) => {
+      try {
+        await jarvis.runTask(req.params.id);
+        res.json({ ok: true });
+      } catch (e: any) {
+        res.status(500).json({ ok: false, error: String(e) });
+      }
+    });
+
+    app.get('/api/jarvis/metrics', (_req, res) => {
+      try {
+        const snap = getSystemMetrics ? getSystemMetrics() : {};
+        res.json({ ok: true, metrics: snap });
+      } catch (e) {
+        res.json({ ok: false, error: String(e) });
+      }
+    });
+  } catch (e) {
+    console.warn('Jarvis integration failed to initialize:', e);
   }
 })();

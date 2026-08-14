@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Button } from "./ui/button";
+import { Textarea } from "./ui/textarea";
+import { Badge } from "./ui/badge";
+import { Checkbox } from "./ui/checkbox";
+import { Skeleton } from "./ui/skeleton";
 import { AlertTriangle, Mic, MicOff, Sparkles, Wand2 } from "lucide-react";
-import { useApp } from "@/state";
-import { useToast } from "@/hooks/use-toast";
+import { useApp } from "../state";
+import { useToast } from "../hooks/use-toast";
 
 type SortedItem = { title: string; target: string; priority: number; begruendung?: string };
 

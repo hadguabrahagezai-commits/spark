@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Page, PageHeader } from "@/components/Layout";
-import { useApp } from "@/state";
+import { Button } from "../components/ui/button";
+import { Skeleton } from "../components/ui/skeleton";
+import { Page, PageHeader } from "../components/Layout";
+import { useApp } from "../state";
 
 type Wrapped = {
   lernminuten: number; xp: number; aktiveTage: number; geloesteAufgaben: number;

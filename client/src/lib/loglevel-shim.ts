@@ -2,7 +2,7 @@
  * Ersatz für das npm-Paket `loglevel`.
  *
  * Grund: `loglevel` ist eine transitive Abhängigkeit von `livekit-client`
- * (über das HeyGen-Live-Avatar-SDK) und greift zur Speicherung der Log-Stufe
+ * (in einigen Live-Avatar-SDKs) und greift zur Speicherung der Log-Stufe
  * auf `window.localStorage` und `document.cookie` zu. Beides ist in der
  * Vorschau-Iframe der Plattform blockiert und führt zu einem abgelehnten Deploy.
  *

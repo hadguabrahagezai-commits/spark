@@ -4,19 +4,19 @@ import {
   AlertTriangle, Brain, Check, CreditCard, Download, Globe, KeyRound, LogOut, Palette,
   ShieldAlert, Trash2,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Slider } from "@/components/ui/slider";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Page, PageHeader } from "@/components/Layout";
-import { SparkMark } from "@/components/Logo";
-import { Integrationen } from "@/components/Integrationen";
-import { useApp } from "@/state";
-import { useToast } from "@/hooks/use-toast";
-import { API_BASE } from "@/lib/queryClient";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Switch } from "../components/ui/switch";
+import { Slider } from "../components/ui/slider";
+import { Skeleton } from "../components/ui/skeleton";
+import { Page, PageHeader } from "../components/Layout";
+import { SparkMark } from "../components/Logo";
+import { Integrationen } from "../components/Integrationen";
+import { useApp } from "../state";
+import { useToast } from "../hooks/use-toast";
+import { API_BASE } from "../lib/queryClient";
 
 const THEMES = [
   { id: "nachtlabor", name: "Nachtlabor" },

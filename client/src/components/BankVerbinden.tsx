@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import { Building2, Info, Loader2, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { useApp } from "@/state";
-import { useToast } from "@/hooks/use-toast";
+import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
+import { useApp } from "../state";
+import { useToast } from "../hooks/use-toast";
 
 type BankStatus = {
   configured: boolean;

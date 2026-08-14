@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from "recharts";
 import { AlertTriangle, Ban, Loader2, Plus, Trash2, Upload, Wallet } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Page, PageHeader } from "@/components/Layout";
-import { Markdown } from "@/components/Markdown";
-import { useApp } from "@/state";
-import { useToast } from "@/hooks/use-toast";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Textarea } from "../components/ui/textarea";
+import { Skeleton } from "../components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { Page, PageHeader } from "../components/Layout";
+import { Markdown } from "../components/Markdown";
+import { useApp } from "../state";
+import { useToast } from "../hooks/use-toast";
 
 type Sub = { id: number; name: string; category: string; amount: number; cycle: string; lastUsed: string; source: string; active: number };
 type Data = { subs: Sub[]; monatlich: number; jaehrlich: number; doppelteKategorien: string[]; banking: { configured: boolean; message: string } };

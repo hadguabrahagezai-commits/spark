@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { API_BASE } from "@/lib/queryClient";
+import { API_BASE } from "./lib/queryClient";
 
 export type Companion = {
   name: string; preset: string; style: string; skin: string; hair: string; hairstyle: string;
@@ -78,6 +78,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
 
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("spark-auth-token");
+      if (stored) setToken(stored);
+    } catch {
+      // Ignore storage restrictions in private browsing or locked-down environments.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (token) window.localStorage.setItem("spark-auth-token", token);
+      else window.localStorage.removeItem("spark-auth-token");
+    } catch {
+      // Ignore storage issues; login state remains in memory for the current session.
+    }
+  }, [token]);
+
   const api = useCallback(
     <T,>(method: string, url: string, body?: unknown) => rawApi<T>(method, url, body, token),
     [token],
@@ -85,12 +103,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (!token) return;
-    const data = await rawApi<any>("GET", "/api/auth/me", undefined, token);
-    setUser(data.user);
-    setCompanion(data.companion);
-    setSettings(data.settings);
-    setStats(data.stats);
+    setLoading(true);
+    try {
+      const data = await rawApi<any>("GET", "/api/auth/me", undefined, token);
+      setUser(data.user);
+      setCompanion(data.companion);
+      setSettings(data.settings);
+      setStats(data.stats);
+    } catch {
+      setToken(null);
+      setUser(null);
+      setCompanion(null);
+      setSettings(null);
+      setStats(null);
+    } finally {
+      setLoading(false);
+    }
   }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    void refresh();
+  }, [token, refresh]);
 
   const login = useCallback(async (t: string) => {
     setLoading(true);

@@ -46,11 +46,7 @@ inklusive Knopf „Verbindung testen“, der einen echten Aufruf beim jeweiligen
    - Anthropic-Schlüssel: <https://console.anthropic.com/settings/keys> → `ANTHROPIC_API_KEY`
    - Fehlt der gewünschte Anbieter, weicht SPARK automatisch aus (Reihenfolge: Gemini → Anthropic →
      OpenAI) und schreibt das ins Server-Log sowie in die Integrationen-Karte.
-2. **Stimme** — <https://elevenlabs.io/app/settings/api-keys> → `ELEVENLABS_API_KEY`
-   (optional `ELEVENLABS_DEFAULT_VOICE_ID`). Ohne ElevenLabs übernimmt OpenAI-TTS, sonst der Browser.
-3. **Live-Avatar** — <https://app.heygen.com/settings?nav=API> → `HEYGEN_API_KEY`,
-   danach im Companion-Setup unter „Live-Avatar“ einen Avatar auswählen (setzt `HEYGEN_AVATAR_ID`
-   pro Nutzer in der Datenbank; die Variable dient als Voreinstellung).
+2. **Stimme / Avatare (optional)** — Serverseitige TTS kann über OpenAI konfiguriert werden (`OPENAI_TTS_MODEL`, `OPENAI_TTS_VOICE`); ohne Server-TTS nutzt die App die Browser-Sprachausgabe. Avatare werden lokal als SVGs/Bilder bereitgestellt; externe Live-Avatar-Anbieter sind optional und nicht zwingend nötig.
 4. **Google** — <https://console.cloud.google.com/apis/credentials> → `GOOGLE_CLIENT_ID`,
    `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` (exakt als Weiterleitungs-URI hinterlegen),
    optional `GOOGLE_MAPS_API_KEY`. Danach in den Integrationen auf „Mit Google verbinden“ tippen.
@@ -103,13 +99,7 @@ Vorlage: `.env.example`.
 | `OPENAI_BASE_URL` | – | optionaler OpenAI-kompatibler Endpunkt (Proxy/Gateway) | offizielle OpenAI-API |
 | `ANTHROPIC_API_KEY` | <https://console.anthropic.com/settings/keys> | Claude als Anbieter oder Fallback | Anthropic steht nicht zur Verfügung |
 | `ANTHROPIC_MODEL` | – | Modell-ID | `claude-sonnet-4-5` |
-| `ELEVENLABS_API_KEY` | <https://elevenlabs.io/app/settings/api-keys> | echte Stimmliste (`/v2/voices`), Streaming-TTS, Instant Voice Cloning | Ausweichen auf OpenAI-TTS, sonst Browser-Sprachausgabe; **kein** Stimmklonen |
-| `ELEVENLABS_MODEL` | – | TTS-Modell | `eleven_multilingual_v2` |
-| `ELEVENLABS_DEFAULT_VOICE_ID` | Stimmliste im Companion-Setup | Standardstimme | erste Stimme des Kontos |
-| `ELEVENLABS_STABILITY` / `_SIMILARITY` / `_STYLE` | – | Startwerte der drei Feinregler | `0.5` / `0.75` / `0.0` |
-| `HEYGEN_API_KEY` | <https://app.heygen.com/settings?nav=API> | Live-Avatar (Avatar-Liste + Sitzungs-Token) | eigener SVG-Avatar mit Viseme-Lip-Sync |
-| `HEYGEN_AVATAR_ID` / `HEYGEN_VOICE_ID` | Avatar-Liste im Companion-Setup | Voreinstellung für Avatar und Stimme | Auswahl erfolgt im UI |
-| `DID_API_KEY` | <https://studio.d-id.com/account-settings> | optionaler Zweitanbieter | HeyGen bzw. SVG-Avatar |
+| `OPENAI_TTS_MODEL` / `OPENAI_TTS_VOICE` | <https://platform.openai.com/api-keys> | Serverseitige TTS (optional); ohne Wert nutzt die App Browser-TTS | `gpt-4o-mini-tts`, `alloy` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | <https://console.cloud.google.com/apis/credentials> | OAuth für Gmail, Kalender, Drive, YouTube, Tasks | „Mit Google fortfahren“ deaktiviert, „Heute“ zeigt keine Termine/Mails |
 | `GOOGLE_REDIRECT_URI` | – | muss exakt in der Google-Konsole hinterlegt sein | `http://localhost:5000/api/google/callback` |
 | `GOOGLE_MAPS_API_KEY` | <https://console.cloud.google.com/google/maps-apis/credentials> | Geocoding und Routen für Anfahrtszeiten | keine Anfahrtszeiten |
@@ -134,9 +124,9 @@ lediglich Statusflags über `GET /api/config` und `GET /api/integrations/status`
 | --- | --- |
 | Chat, Quiz, Missionen, Chaos-Sortierung | Gemini `generateContent(Stream)`, OpenAI `chat.completions`, Anthropic `messages` — inkl. Streaming |
 | Scan-zu-Quiz | Bildeingabe direkt an das Vision-Modell des aktiven Anbieters |
-| Stimmliste | `GET https://api.elevenlabs.io/v2/voices` (sonst OpenAI-Stimmen, sonst Browser) |
-| Sprachausgabe | `POST https://api.elevenlabs.io/v1/text-to-speech/{id}/stream` mit `voice_settings` aus den drei Reglern |
-| Stimmklon | `POST https://api.elevenlabs.io/v1/voices/add` (Instant Voice Cloning, nur mit Einwilligung) |
+| Stimmliste | Serverseitige Stimmlisten (z. B. OpenAI) sofern konfiguriert; sonst Browser-Stimmen |
+| Sprachausgabe | Serverseitige Streaming-TTS (z. B. OpenAI) wenn konfiguriert; sonst Browser-Sprachausgabe |
+| Stimmklon | Serverseitiges Stimmklonen nur bei konfiguriertem Anbieter und ausdrücklicher Einwilligung; sonst nicht verfügbar |
 | Spracherkennung | OpenAI-Whisper über `/v1/audio/transcriptions`, Fallback Web-Speech-API |
 | Live-Avatar | `POST https://api.liveavatar.com/v1/sessions/token` + `@heygen/liveavatar-web-sdk` im Frontend; Fallback `POST https://api.heygen.com/v1/streaming.create_token`; Avatar-Liste über `/v1/avatars/public` bzw. `GET https://api.heygen.com/v2/avatars` |
 | Bank | Plaid `linkTokenCreate`, `itemPublicTokenExchange`, `accountsGet`, `transactionsSync`, **`transactionsRecurringGet`** (echte Abo-Erkennung) |

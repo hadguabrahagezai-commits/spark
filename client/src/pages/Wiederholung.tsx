@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle2, Repeat, RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Page, PageHeader } from "@/components/Layout";
-import { useApp } from "@/state";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { Skeleton } from "../components/ui/skeleton";
+import { Page, PageHeader } from "../components/Layout";
+import { useApp } from "../state";
 
 type Card = {
   id: number; subjectSlug: string; front: string; back: string; dueAt: number;

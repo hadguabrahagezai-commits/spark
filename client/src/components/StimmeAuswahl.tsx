@@ -1,25 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Mic, Play, Square, Volume2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useApp } from "@/state";
-import { useToast } from "@/hooks/use-toast";
-import { API_BASE } from "@/lib/queryClient";
+import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
+import { Label } from "./ui/label";
+import { Slider } from "./ui/slider";
+import { Skeleton } from "./ui/skeleton";
+import { useApp } from "../state";
+import { useToast } from "../hooks/use-toast";
+import { API_BASE } from "../lib/queryClient";
 
 export type VoiceEntry = {
   id: string;
   name: string;
-  provider?: "elevenlabs" | "heygen" | "openai";
+  provider?: "openai";
   vorschauUrl?: string;
   kategorie?: string;
   labels?: Record<string, string>;
   beschreibung?: string;
 };
 export type VoiceListe = {
-  source: "elevenlabs" | "openai";
+  source: "openai";
   voices: VoiceEntry[];
   hinweis: string;
   standardStimme: string;
@@ -28,7 +28,6 @@ export type VoiceListe = {
 };
 
 const QUELLE_TEXT: Record<VoiceListe["source"], string> = {
-  elevenlabs: "ElevenLabs (echte Stimmen)",
   openai: "OpenAI-TTS",
 };
 
@@ -48,7 +47,6 @@ export function StimmeAuswahl({ companionName }: { companionName: string }) {
   const [spielt, setSpielt] = useState<string | null>(null);
   const [klont, setKlont] = useState(false);
   const [aufnahme, setAufnahme] = useState(false);
-  const [heygenVoiceId, setHeygenVoiceId] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
 
@@ -62,7 +60,7 @@ export function StimmeAuswahl({ companionName }: { companionName: string }) {
         if (!gewaehlt && l.standardStimme) setGewaehlt(l.standardStimme);
       })
       .catch(() => setListe({ source: "openai", voices: [], hinweis: "Stimmliste konnte nicht geladen werden.", standardStimme: "", regler: { stability: 0.5, similarity: 0.75, style: 0 } }));
-    void api<any>("GET", "/api/avatar/status").then((status) => setHeygenVoiceId(status?.voiceId || "")).catch(() => {});
+    void api<any>("GET", "/api/avatar/status").then(() => {}).catch(() => {});
     return () => {
       audioRef.current?.pause();
     };
@@ -103,11 +101,11 @@ export function StimmeAuswahl({ companionName }: { companionName: string }) {
     }
   }
 
-  async function speichern(voiceId: string, provider: "elevenlabs" | "openai" | "heygen" = liste?.source || "elevenlabs") {
+  async function speichern(voiceId: string, provider?: "openai") {
     setGewaehlt(voiceId);
     await patchCompanion({
       voiceId,
-      voiceProvider: provider,
+      voiceProvider: provider || liste?.source,
       voiceStability: stability,
       voiceSimilarity: similarity,
       voiceStyle: style,
@@ -183,84 +181,57 @@ export function StimmeAuswahl({ companionName }: { companionName: string }) {
         </p>
       )}
 
-      {liste.voices.length > 0 ? (
-        <div className="grid max-h-64 gap-2 overflow-y-auto spark-scroll sm:grid-cols-2">
-          {liste.voices.map((v) => (
-            <div
-              key={v.id}
-              className={`flex items-center gap-2 rounded-md border p-2 ${gewaehlt === v.id ? "border-primary bg-primary/10" : "border-card-border bg-card"}`}
-              data-testid={`row-voice-${v.id}`}
-            >
-              <button className="min-w-0 flex-1 text-left" onClick={() => void speichern(v.id, v.provider || liste.source)} data-testid={`button-select-voice-${v.id}`}>
-                <p className="truncate text-xs font-medium">{v.name}</p>
-                <p className="truncate text-[11px] text-muted-foreground">
-                  {v.beschreibung ||
-                    [v.labels?.gender, v.labels?.accent, v.labels?.age, v.labels?.use_case].filter(Boolean).join(" · ") ||
-                    v.kategorie ||
-                    "Stimme"}
-                </p>
-              </button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 shrink-0"
-                aria-label={`${v.name} anhören`}
-                onClick={() => void vorschau(v)}
-                data-testid={`button-preview-voice-${v.id}`}
+      <div>
+        {liste.voices.length > 0 ? (
+          <div className="grid max-h-64 gap-2 overflow-y-auto spark-scroll sm:grid-cols-2">
+            {liste.voices.map((v) => (
+              <div
+                key={v.id}
+                className={`flex items-center gap-2 rounded-md border p-2 ${gewaehlt === v.id ? "border-primary bg-primary/10" : "border-card-border bg-card"}`}
+                data-testid={`row-voice-${v.id}`}
               >
-                {spielt === v.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-              </Button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="rounded-md border border-dashed border-border p-4 text-xs text-muted-foreground">
-          Keine Anbieter-Stimmen verfügbar. Prüfe die ElevenLabs- oder OpenAI-Konfiguration.
-        </p>
-      )}
-
-      {heygenVoiceId && (
-        <div className="rounded-md border border-card-border bg-card p-3">
-          <p className="text-sm font-medium">HeyGen Live-Stimme</p>
-          <p className="mt-1 text-xs text-muted-foreground">Diese Stimme wird ausschließlich vom HeyGen-Videoavatar mit Lippenbewegung genutzt.</p>
-          <Button className="mt-3" size="sm" variant={companion?.voiceProvider === "heygen" ? "default" : "outline"} onClick={() => void speichern(heygenVoiceId, "heygen")} data-testid="button-select-heygen-voice">
-            HeyGen-Stimme für Videoavatar nutzen
-          </Button>
-        </div>
-      )}
-
-      {liste.source === "elevenlabs" && (
-        <div className="space-y-3 rounded-md border border-card-border bg-card p-3">
-          <p className="text-sm font-medium">Feinregler (wirken echt auf ElevenLabs)</p>
-          {[
-            { label: "Stabilität (stability)", value: stability, set: setStability, id: "stability" },
-            { label: "Ähnlichkeit (similarity_boost)", value: similarity, set: setSimilarity, id: "similarity" },
-            { label: "Stil (style)", value: style, set: setStyle, id: "style" },
-          ].map((s) => (
-            <div key={s.id} className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <Label>{s.label}</Label>
-                <span className="text-xs text-muted-foreground">{s.value.toFixed(2)}</span>
+                <button className="min-w-0 flex-1 text-left" onClick={() => void speichern(v.id, v.provider || liste.source)} data-testid={`button-select-voice-${v.id}`}>
+                  <p className="truncate text-xs font-medium">{v.name}</p>
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {v.beschreibung || [v.labels?.gender, v.labels?.accent, v.labels?.age, v.labels?.use_case].filter(Boolean).join(" · ") || v.kategorie || "Stimme"}
+                  </p>
+                </button>
+                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" aria-label={`${v.name} anhören`} onClick={() => void vorschau(v)} data-testid={`button-preview-voice-${v.id}`}>
+                  {spielt === v.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                </Button>
               </div>
-              <Slider value={[s.value]} onValueChange={(v) => s.set(v[0])} min={0} max={1} step={0.05} data-testid={`slider-${s.id}`} />
-            </div>
-          ))}
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-md border border-dashed border-border p-4 text-xs text-muted-foreground">Keine Anbieter-Stimmen verfügbar. Prüfe die OpenAI-Konfiguration oder nutze die Browser-Sprachausgabe.</p>
+        )}
+
+        <div className="space-y-3 mt-3">
+          <div className="flex items-center justify-between text-sm">
+            <Label>Stability</Label>
+            <span className="text-xs text-muted-foreground">{stability.toFixed(2)}</span>
+          </div>
+          <Slider value={[stability]} onValueChange={(v) => setStability(v[0])} min={0} max={1} step={0.01} data-testid={`slider-stability`} />
+          <div className="flex items-center justify-between text-sm">
+            <Label>Similarity</Label>
+            <span className="text-xs text-muted-foreground">{similarity.toFixed(2)}</span>
+          </div>
+          <Slider value={[similarity]} onValueChange={(v) => setSimilarity(v[0])} min={0} max={1} step={0.01} data-testid={`slider-similarity`} />
+          <div className="flex items-center justify-between text-sm">
+            <Label>Style</Label>
+            <span className="text-xs text-muted-foreground">{style.toFixed(2)}</span>
+          </div>
+          <Slider value={[style]} onValueChange={(v) => setStyle(v[0])} min={0} max={1} step={0.01} data-testid={`slider-style`} />
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="secondary" onClick={() => void reglerSpeichern()} data-testid="button-save-voice-settings">
               Regler speichern
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!gewaehlt}
-              onClick={() => void vorschau({ id: gewaehlt, name: "Auswahl" })}
-              data-testid="button-test-voice-settings"
-            >
+            <Button size="sm" variant="outline" disabled={!gewaehlt} onClick={() => void vorschau({ id: gewaehlt, name: "Auswahl" })} data-testid="button-test-voice-settings">
               <Volume2 className="mr-1 h-3.5 w-3.5" /> Mit Reglern anhören
             </Button>
           </div>
         </div>
-      )}
+      </div>
 
       <div className="rounded-md border border-card-border bg-card p-4">
         <p className="text-sm font-medium">Eigene Stimme nutzen (Instant Voice Cloning)</p>
@@ -278,9 +249,7 @@ export function StimmeAuswahl({ companionName }: { companionName: string }) {
           {klont ? "Wird geklont …" : aufnahme ? "Aufnahme stoppen" : "Aufnahme starten"}
         </Button>
         <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground break-words">
-          {liste.source === "elevenlabs"
-            ? "Die Aufnahme geht an ElevenLabs (/v1/voices/add) und erzeugt eine echte geklonte Stimme, die danach für alle Antworten genutzt wird."
-            : "Ohne ELEVENLABS_API_KEY wird nichts geklont — SPARK sagt das ehrlich und nutzt weiterhin die gewählte Standardstimme."}
+          Die Aufnahme wird optional an den Server geschickt. Stimmklonen ist nur verfügbar, wenn serverseitige TTS/Cloning konfiguriert ist; sonst nutzt SPARK Browser- oder Standardstimmen.
         </p>
       </div>
     </div>

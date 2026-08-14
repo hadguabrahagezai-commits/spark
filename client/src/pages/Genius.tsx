@@ -4,17 +4,17 @@ import {
   Atom, Beaker, Check, Cog, Globe, Lightbulb, Loader2, Lock, MessageSquare, Moon, Pause,
   Play, RotateCcw, ScanLine, ScrollText, Sigma, Sprout, Timer, Trophy,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Page, PageHeader } from "@/components/Layout";
-import { Markdown } from "@/components/Markdown";
-import { useApp } from "@/state";
-import { useToast } from "@/hooks/use-toast";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { Textarea } from "../components/ui/textarea";
+import { Input } from "../components/ui/input";
+import { Skeleton } from "../components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { Page, PageHeader } from "../components/Layout";
+import { Markdown } from "../components/Markdown";
+import { useApp } from "../state";
+import { useToast } from "../hooks/use-toast";
 import { useLocation } from "wouter";
 
 const ICONS: Record<string, any> = {
@@ -123,6 +123,7 @@ export default function Genius() {
   const [loadingQuiz, setLoadingQuiz] = useState(false);
   const [quizError, setQuizError] = useState("");
   const [score, setScore] = useState(0);
+  const [infiniteLevel, setInfiniteLevel] = useState(1);
   const [scanText, setScanText] = useState("");
   const [scanBild, setScanBild] = useState<string>("");
   const [scanBildName, setScanBildName] = useState("");
@@ -157,11 +158,12 @@ export default function Genius() {
   async function nextQuestion() {
     if (qIndex + 1 >= questions.length) {
       if (quizSubject) {
-        await api("POST", "/api/level/complete", { subject: quizSubject.slug, stage: quizStage, score });
+        await api("POST", "/api/level/complete", { subject: quizSubject.slug, stage: quizStage, score, infiniteLevel });
         await load(); await refresh();
       }
       setQuizOpen(false);
-      toast({ title: "Runde beendet", description: `${score} von ${questions.length} richtig.` });
+      setInfiniteLevel((l) => l + 1);
+      toast({ title: "Runde beendet", description: `${score} von ${questions.length} richtig. Level ${infiniteLevel} abgeschlossen.` });
       return;
     }
     setQIndex((i) => i + 1); setChosen(null); setResult(null); setShowHint(false); setDepth(""); setDepthText("");

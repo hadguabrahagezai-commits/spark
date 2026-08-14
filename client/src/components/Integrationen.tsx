@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Check, ExternalLink, Loader2, Plug, RefreshCw, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useApp } from "@/state";
-import { API_BASE } from "@/lib/queryClient";
+import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
+import { Skeleton } from "./ui/skeleton";
+import { useApp } from "../state";
+import { API_BASE } from "../lib/queryClient";
 
 type Status = "verbunden" | "teilweise" | "nicht_konfiguriert";
 type Integration = {
